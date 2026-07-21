@@ -14,9 +14,14 @@ pub(crate) struct CannedProfile<const N: usize> {
 
 impl<const N: usize> CannedProfile<N> {
 	// Starting point at [0] always has a 0 timestamp and no kinematics.
-	pub(crate) fn new() -> Self {
+	pub(crate) fn new(delay: u32) -> Self {
 		assert!(N > 0);
-		Self { count: 1, f: [ModelFrame::default(); N] }
+		let mut me = CannedProfile {
+			count: 1,
+			f: [ModelFrame::default(); N]
+		};
+		me.f[0].ts = delay;
+		me
 	}
 
 	pub(crate) fn append(&mut self, f: Motion, dur: u32, rel: bool) {

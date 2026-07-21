@@ -52,7 +52,7 @@ impl Model {
 				rate, imu[1].s.unwrap_or(0.08),
 				imu[1].k, imu[1].m
 			),
-			mag: Magnetometer::new(rate, imu[0].k, imu[0].m),
+			mag: Magnetometer::new(rate, imu[2].k, imu[2].m),
 			bar: Barometer::new(rate, bar.k, bar.m)
 		}
 	}
