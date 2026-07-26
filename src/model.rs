@@ -1,6 +1,6 @@
 use libm::powf;
 
-use crate::{XYZ, config::{G_SI_NED, LAPSE_RT, MAX_SUBNATICA, R_EXP, SEA_PRS, SEA_TMP, SensorConf}, math::{Quaternion, Vector, sq}, Motion, sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer}};
+use crate::{XYZ, config::{G_SI_NED, LAPSE_RT, MAX_SUBNATICA, R_EXP, SEA_PRS, SEA_TMP, SyntheticSensor}, math::{Quaternion, Vector, sq}, Motion, sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer}};
 
 pub(crate) struct ModelState {
 	pub(crate) acc: XYZ,
@@ -39,17 +39,17 @@ pub(crate) struct Model {
 impl Model {
 	pub(crate) fn new(
 		rate: u32,
-		imu: &[SensorConf<3>; 3],
-		bar: &SensorConf<1>,
+		imu: [SyntheticSensor<3>; 3],
+		bar: SyntheticSensor<1>,
 	) -> Self {
 		Self {
 			s: ModelState::new(),
 			acl: Accelerometer::new(
-				rate, imu[0].s.unwrap_or(0.05),
+				rate, imu[0].s.unwrap_or(0.0005),
 				imu[0].k, imu[0].m
 			),
 			gyr: Gyroscope::new(
-				rate, imu[1].s.unwrap_or(0.08),
+				rate, imu[1].s.unwrap_or(0.00001),
 				imu[1].k, imu[1].m
 			),
 			mag: Magnetometer::new(rate, imu[2].k, imu[2].m),

@@ -2,6 +2,8 @@
 //! 
 //! Global constants and sensor configuration structs.
 
+use crate::{Alignment, Bias};
+
 /// Earth (at 43.0019167, -78.787083)
 
 pub(crate) const EARTH_MAGFIELD: [f32; 3] = [19_133.4, -3_452.9, 48_806.1];
@@ -26,7 +28,7 @@ pub(crate) const TOLER: f32 = 1e-3;
 /// Sensor config
 
 #[derive(Clone, Copy)]
-pub struct CoreConf {
+pub struct Collector {
 	pub(crate) odr: u32,
 	pub(crate) cutoff: f32,
 	pub(crate) qbw: f32,
@@ -34,15 +36,14 @@ pub struct CoreConf {
 }
 
 #[derive(Clone, Copy)]
-pub struct BiasConf<const N: usize> {
-	pub(crate) state: u32,
+pub struct Disperser<const N: usize> {
 	pub(crate) sigma: f32,
-	pub(crate) bias: [f32; N],
-	pub(crate) align: [[f32; N]; N],
+	pub(crate) bias: Bias<N>,
+	pub(crate) align: Alignment<N>,
 }
 
-pub struct SensorConf<const N: usize> {
-	pub(crate) k: CoreConf,
-	pub(crate) m: BiasConf<N>,
+pub struct SyntheticSensor<const N: usize> {
+	pub(crate) k: Collector,
+	pub(crate) m: Disperser<N>,
 	pub(crate) s: Option<f32>
 }

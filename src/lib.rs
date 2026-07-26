@@ -6,16 +6,22 @@ use crate::{builder::SimBuilder, model::Model, profile::CannedProfile, sensors::
 mod filters;
 mod model;
 mod sensors;
-mod noise;
 mod config;
 mod math;
 mod profile;
-mod builder;
+
+pub mod builder;
 
 pub type XYZ = [f32; 3];
 
+pub type ODR = (u32, u32, u32, u32);
+
 #[derive(Clone, Copy)]
 pub struct Motion(pub XYZ, pub XYZ);
+
+pub type Bias<const N: usize> = [f32; N];
+
+pub type Alignment<const N: usize> = [Bias<N>; N];
 
 macro_rules! getter {
 	($name:ident, $field:ident, $type:ident) => {
@@ -43,7 +49,7 @@ impl<const N: usize> Simulation<N> {
 	/// `delay` specifies the time during which no work should be done
 	/// towards kinematic targets. This is useful to simulate inherent
 	/// sensor drift while a vehicle is stationary.
-	pub fn new<'a>(mut b: impl SimBuilder<'a>, delay: u32) -> Self {
+	pub fn new(mut b: impl SimBuilder, delay: u32) -> Self {
 		let rate = b.rate();
 		Self {
 			m: Model::new(rate, b.imu(), b.baro()),

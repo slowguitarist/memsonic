@@ -1,12 +1,51 @@
 use libm::{expf};
 
+use crate::Alignment;
 use crate::XYZ;
 use crate::config::*;
 use crate::filters::BiquadType::LowPass;
 use crate::math::*;
 use crate::model::*;
 use crate::filters::*;
-use crate::noise::*;
+
+pub(crate) trait NoiseMode {}
+
+pub(crate) struct Normal;
+impl NoiseMode for Normal {}
+
+pub(crate) struct Fast;
+impl NoiseMode for Fast {}
+
+pub(crate) trait Distort<T: Copy, M: NoiseMode> {
+	fn distort(&self) -> T;
+}
+
+pub(crate) struct Gaussian(f32);
+
+impl Distort<f32, Normal> for Gaussian {
+	fn distort(&self) -> f32 {
+		let mut s = 0.0;
+
+		for _ in 0..12 {
+			s += (rand() as f32) / (u32::MAX as f32);
+		}
+
+		(s - 6.0) * self.0
+	}
+}
+
+impl Distort<f32, Fast> for Gaussian {
+	fn distort(&self) -> f32 {
+		let mut s = 0;
+
+		for _ in 0..3 {
+			let r = rand();
+			s += (r & 0xFF) + ((r >> 8) & 0xFF) + ((r >> 16) & 0xFF) + (r >> 24);
+		}
+
+		(s as f32 - 1530.0) / 256.0 * self.0
+	}
+}
 
 pub(crate) trait Evaluate {
 	fn evaluate(&mut self, s: &ModelState) -> &Self;
@@ -50,19 +89,18 @@ impl<const N: usize> SensorCore<N> {
 } 
 
 struct BiasedAxis<const N: usize> {
-	align: [[f32; N]; N],
+	align: Alignment<N>,
 	bias: [f32; N],
 	ng: Gaussian,
 }
 
 impl<const N: usize> BiasedAxis<N> {
 	pub(crate) fn new(
-		state: u32,
 		sigma: f32,
 		bias: [f32; N],
-		align: [[f32; N]; N],
+		align: Alignment<N>,
 	) -> Self {
-		Self { align, bias, ng: Gaussian::new(state, sigma) }
+		Self { align, bias, ng: Gaussian(sigma) }
 	}
 }
 
@@ -77,7 +115,7 @@ impl<const N: usize> BiasedAxis<N> {
 					raw += axis[i] * phys[i];
 				}
 				
-				raw + <Gaussian as Distort<f32, Normal>>::distort(&mut self.ng)
+				raw + <Gaussian as Distort<f32, Normal>>::distort(&self.ng)
 			})
 	}
 }
@@ -92,8 +130,8 @@ impl Accelerometer {
 	pub(crate) fn new(
 		engrate: u32,
 		vibsens: f32,
-		k: CoreConf,
-		m: BiasConf<3>
+		k: Collector,
+		m: Disperser<3>
 	) -> Self {
 		Self {
 			k: SensorCore::new(
@@ -102,7 +140,7 @@ impl Accelerometer {
 				LowPass(k.cutoff, k.qbw),
 				k.sens
 			),
-			m: BiasedAxis::new(m.state, m.sigma, m.bias, m.align),
+			m: BiasedAxis::new(m.sigma, m.bias, m.align),
 			vibsens
 		}
 	}
@@ -110,7 +148,7 @@ impl Accelerometer {
 
 impl Evaluate for Accelerometer {
 	fn evaluate(&mut self, s: &ModelState) -> &Self {
-		self.m.ng.sigma = s.vib * self.vibsens;
+		self.m.ng.0 = s.vib * self.vibsens;
 		self.k.gather(self.m.scatter(&s.acc));
 		self
 	}
@@ -126,8 +164,8 @@ impl Gyroscope {
 	pub(crate) fn new(
 		engrate: u32,
 		gsens: f32,
-		k: CoreConf,
-		m: BiasConf<3>
+		k: Collector,
+		m: Disperser<3>
 	) -> Self {
 		Self {
 			k: SensorCore::new(
@@ -136,7 +174,7 @@ impl Gyroscope {
 				LowPass(k.cutoff, k.qbw),
 				k.sens
 			),
-			m: BiasedAxis::new(m.state, m.sigma, m.bias, m.align),
+			m: BiasedAxis::new(m.sigma, m.bias, m.align),
 			gsens
 		}
 	}
@@ -162,8 +200,8 @@ pub(crate) struct Magnetometer {
 impl Magnetometer {
 	pub(crate) fn new(
 		engrate: u32,
-		k: CoreConf,
-		m: BiasConf<3>
+		k: Collector,
+		m: Disperser<3>
 	) -> Self {
 		Self {
 			k: SensorCore::new(
@@ -172,7 +210,7 @@ impl Magnetometer {
 				LowPass(k.cutoff, k.qbw),
 				k.sens
 			),
-			m: BiasedAxis::new(m.state, m.sigma, m.bias, m.align),
+			m: BiasedAxis::new(m.sigma, m.bias, m.align),
 		}
 	}
 }
@@ -196,8 +234,8 @@ pub(crate) struct Barometer {
 impl Barometer {
 	pub(crate) fn new(
 		engrate: u32,
-		k: CoreConf,
-		m: BiasConf<1>,
+		k: Collector,
+		m: Disperser<1>,
 	) -> Self {
 		Self {
 			k: SensorCore::new(
@@ -206,7 +244,7 @@ impl Barometer {
 				LowPass(k.cutoff, k.qbw),
 				k.sens
 			),
-			ng: Gaussian::new(m.state, m.sigma),
+			ng: Gaussian(m.sigma),
 			bias: m.bias[0],
 			lag: m.align[0][0],
 			tmp: SEA_TMP
@@ -228,7 +266,7 @@ impl Evaluate for Barometer {
 		let drift = (self.tmp - 20.0) * DRIFT_PER_C;
 
 		let prs = [ s.prs + shock + drift + self.bias +
-			<Gaussian as Distort<f32, Normal>>::distort(&mut self.ng) ];
+			<Gaussian as Distort<f32, Normal>>::distort(&self.ng) ];
 
 		self.k.gather(prs.iter().copied());
 		self
