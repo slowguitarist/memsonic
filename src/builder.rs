@@ -58,20 +58,20 @@ impl<const N: usize> SensorConf<N> {
 		}
 	}
 
-	// TODO 1: maybe split params depending on 1.0 - d from those depending on d.
-	// Currently this inverts the intent if blending fn is non-symmetrical.
-	//
-	// TODO 2: test if this is enough input per sensor. Maybe split all params??
-	fn decay<B: Blend>(&mut self, d: f32, k: f32) {
+	fn decay<B: Blend>(&mut self, d: f32, k: f32) -> &mut Self {
 		let i = 1.0 - d;
 		
 		self.cutoff = interpolate::<B>(100.0, 20.0, i, k);
 		self.qbw = interpolate::<B>(FRAC_1_SQRT_2, 0.5, i, k);
 		self.firsens = Some(interpolate::<B>(700_000.0, 5_000.0, i, k));
-
+		self
+	}
+	
+	fn disperse<B: Blend>(&mut self, d: f32, k: f32) -> &mut Self {
 		self.sigma = interpolate::<B>(0.1, 0.0005, d, k);
 		self.bias = self.bias.randomize(d);
 		self.align = self.align.randomize(d);
+		self
 	}
 }
 
@@ -148,9 +148,15 @@ impl SimBuilder for SkewedIMU {
 	}
 
 	fn imu(&mut self) -> [SyntheticSensor<3>; 3] {
-		self.m.acc.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
-		self.m.gyr.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
-		self.m.mag.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
+		self.m.acc
+			.decay::<SchilckBias>(self.deg, 0.5)
+			.disperse::<SchilckBias>(self.deg, 0.5);
+		self.m.gyr
+			.decay::<SchilckBias>(self.deg, 0.5)
+			.disperse::<SchilckBias>(self.deg, 0.5);
+		self.m.mag
+			.decay::<SchilckBias>(self.deg, 0.5)
+			.disperse::<SchilckBias>(self.deg, 0.5);
 
 		self.m.acc.sens = Some(0.0005 + 0.2 * self.deg);
 		self.m.gyr.sens = Some(0.00001 + 0.005 * self.deg);
@@ -159,7 +165,10 @@ impl SimBuilder for SkewedIMU {
 	}
 
 	fn baro(&mut self) -> SyntheticSensor<1> {
-		self.m.bar.decay::<Hyperbolic>(0.1 * self.deg, 0.05);
+		self.m.bar
+			.decay::<Hyperbolic>(0.05 * self.deg, 0.05)
+			.disperse::<Hyperbolic>(0.05 * self.deg, 0.05);
+
 		self.m.baro()
 	}
 }

@@ -165,9 +165,9 @@ impl Blend for SchilckBias {
 
 #[allow(unused)]
 #[derive(Default, Clone, Copy)]
-pub(crate) struct TrigIncreasing;
+pub(crate) struct TrigIncr;
 
-impl Blend for TrigIncreasing {
+impl Blend for TrigIncr {
 	fn blend(self, t: f32, k: f32) -> f32 {
 		0.5 * (1.0 - cosf(PI * powf(t, fabs(k))))
 	}
@@ -175,9 +175,9 @@ impl Blend for TrigIncreasing {
 
 #[allow(unused)]
 #[derive(Default, Clone, Copy)]
-pub(crate) struct TrigDecreasing;
+pub(crate) struct TrigDecr;
 
-impl Blend for TrigDecreasing {
+impl Blend for TrigDecr {
 	fn blend(self, t: f32, k: f32) -> f32 {
 		0.5 * (1.0 + cosf(PI * powf(t, fabs(k))))
 	}
