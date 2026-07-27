@@ -72,8 +72,8 @@ impl<const N: usize> Simulation<N> {
 	/// ```
 	/// let sim = Simulation::new(bob, 1000);
 	/// sim
-	/// 	.fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
-	/// 	.fix(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
+	///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
+	///     .fix(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
 	/// ```
 	/// 
 	/// The first call to [`fix`] will create a new data point with the
@@ -99,8 +99,8 @@ impl<const N: usize> Simulation<N> {
 	/// ```
 	/// let sim = Simulation::new(bob, 1000);
 	/// sim
-	/// 	.fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
-	/// 	.add(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
+	///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
+	///     .add(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
 	/// ```
 	/// 
 	/// The call to [`add`] will create a new data point with the timestamp
@@ -121,7 +121,7 @@ impl<const N: usize> Simulation<N> {
 			return Err(())
 		}
 
-		if let Some(target) = self.p.interpolate(tim) {
+		if let Some(target) = self.p.linearize(tim) {
 			let secs = self.rate as f32 / 1000.0;
 
 			while tim.wrapping_sub(self.tim) >= self.rate {

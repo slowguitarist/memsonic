@@ -1,29 +1,16 @@
-use crate::{Alignment, Bias, XYZ};
-use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
+use libm::{cosf, powf, tanhf};
 
-/// Pocket PRNG
+use crate::{Alignment, Bias, XYZ, config::rand};
+use core::{f32::consts::PI, array::from_fn};
 
-pub(crate) fn rand() -> u32 {
-	// I, undersigned, voluntarily give up any notion of order, total or partial,
-	// on this piece of memory. Here it is sufficient for a thread of execution to
-	// observe at least its own writes, and acceptable if different threads end up
-	// hammering the same values on their respective cache lines before syncing.
-	static STATE: AtomicU32 = AtomicU32::new(0xdeadfa11);
-
-	STATE.try_update(Relaxed, Relaxed, |mut v| {
-		v ^= v << 13;
-		v ^= v >> 17;
-		v ^= v << 5;
-		Some(v)
-	}).unwrap_or(0xf70a57ed)
-}
+/////////////////////////////////////////////////////////////////////////////
+// Functions on f32
+/////////////////////////////////////////////////////////////////////////////
 
 pub(crate) fn leash(pt: f32, d: f32) -> f32 {
 	let r = rand();
 	pt + d * f32::from_bits((r >> 9) | 0x3f000000 | (r << 31))
 }
-
-/// Math on f32.
 
 #[inline(always)]
 pub(crate) const fn sq(x: f32) -> f32 {
@@ -45,7 +32,6 @@ pub(crate) const fn basically1(x: f32) -> bool {
 	fabs(x - 1.0) < crate::config::TOLER
 }
 
-// Well... only ARM MCUs have FPUs, right?
 #[inline(always)]
 pub(crate) fn sqrt(x: f32) -> f32 {
 	#[cfg(all(target_arch = "arm", target_feature = "vfp2"))]
@@ -75,13 +61,49 @@ pub(crate) fn invsqrt(x: f32) -> Option<f32> {
 	}
 }
 
-/// Math on triplets of f32.
+pub(crate) fn interpolate<B: Blend>(
+	x1: f32,
+	x0: f32,
+	d: f32,
+	k: f32
+) -> f32 {
+	assert!(x0 < x1);
+	x0 + (x1 - x0) * B::default().blend(d.clamp(0.0, 1.0), k)
+}
 
-pub(crate) trait Vector where Self: Copy {
+/////////////////////////////////////////////////////////////////////////////
+// Traits
+/////////////////////////////////////////////////////////////////////////////
+
+pub(crate) trait Vector
+	where Self: Copy
+{
 	fn add(self, v: Self) -> Self;
 	fn norm(&self) -> f32;
 	fn lerp(self, v: Self, k: f32) -> Self;
 }
+
+pub(crate) trait Randomize<const N: usize>
+	where Self: Copy
+{
+	fn randomize(self, d: f32) -> Self;
+}
+
+pub(crate) trait SquareMatrix<const N: usize>
+	where Self: Copy
+{
+	fn identity() -> Self;
+}
+
+pub(crate) trait Blend
+	where Self: Copy + Default
+{
+	fn blend(self, t: f32, k: f32) -> f32;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Trait implementations
+/////////////////////////////////////////////////////////////////////////////
 
 impl Vector for XYZ {
 	fn add(self, v: Self) -> Self {
@@ -105,47 +127,81 @@ impl Vector for XYZ {
 	}
 }
 
-/// Math on arrays of f32.
-
-pub(crate) trait RandomArray<const N: usize>
-	where Self: Copy
-{
-	fn randomize(self, d: f32) -> Self;
-}
-
-pub(crate) trait SquareMatrix<const N: usize>
-	where Self: Copy
-{
-	fn identity() -> Self;
-}
-
-impl<const N: usize> RandomArray<N> for Bias<N> {
+impl<const N: usize> Randomize<N> for Bias<N> {
 	fn randomize(self, d: f32) -> Self {
 		let s = d.clamp(0.0, 1.0);
 		let mut k = self.iter().copied();
-		core::array::from_fn(|_| leash(k.next().unwrap_or_default(), s))
+		from_fn(|_| leash(k.next().unwrap_or_default(), s))
 	}
-} 
+}
 
 impl<const N: usize> SquareMatrix<N> for Alignment<N> {
 	fn identity() -> Self {
-		let mut s = [[0.0; N]; N];
-		for i in 0..N { s[i][i] = 1.0; }
-		s
+		from_fn(|i| {
+			let mut r = [0.0; N];
+			r[i] = 1.0;
+			r
+		})
 	}
 }
 
-impl<const N: usize> RandomArray<N> for Alignment<N> {
+impl<const N: usize> Randomize<N> for Alignment<N> {
 	fn randomize(self, d: f32) -> Self {
 		let s = d * 0.2;
 		let mut k = self.iter().copied();
-		core::array::from_fn(|_| k.next().unwrap_or([0.0; N]).randomize(s))
+		from_fn(|_| k.next().unwrap_or([0.0; N]).randomize(s))
 	}
 }
 
-/// Math on quaternion.
+#[allow(unused)]
+#[derive(Default, Clone, Copy)]
+pub(crate) struct SchilckBias;
 
-// Interpreted as WXYZ.
+impl Blend for SchilckBias {
+	fn blend(self, t: f32, k: f32) -> f32 {
+		t / ((1.0 / k.clamp(0.0, 1.0) - 2.0) * (1.0 - t) + 1.0)
+	}
+}
+
+#[allow(unused)]
+#[derive(Default, Clone, Copy)]
+pub(crate) struct TrigIncreasing;
+
+impl Blend for TrigIncreasing {
+	fn blend(self, t: f32, k: f32) -> f32 {
+		0.5 * (1.0 - cosf(PI * powf(t, fabs(k))))
+	}
+}
+
+#[allow(unused)]
+#[derive(Default, Clone, Copy)]
+pub(crate) struct TrigDecreasing;
+
+impl Blend for TrigDecreasing {
+	fn blend(self, t: f32, k: f32) -> f32 {
+		0.5 * (1.0 + cosf(PI * powf(t, fabs(k))))
+	}
+}
+
+#[allow(unused)]
+#[derive(Default, Clone, Copy)]
+pub(crate) struct Hyperbolic;
+
+impl Blend for Hyperbolic {
+	fn blend(self, t: f32, k: f32) -> f32 {
+		if let -1.0..=1.0 = k {
+			return t
+		}
+		let kh = 0.5 * k;
+		0.5 * (1.0 + tanhf(k * t - kh) / tanhf(kh))
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Quaternion
+/////////////////////////////////////////////////////////////////////////////
+
+/// Interpreted as WXYZ.
 pub(crate) struct Quaternion(f32, f32, f32, f32);
 
 impl Quaternion {

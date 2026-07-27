@@ -38,7 +38,7 @@ impl<const N: usize> CannedProfile<N> {
 		}
 	}
 
-	pub(crate) fn interpolate(&self, tim: u32) -> Option<Motion> {
+	pub(crate) fn linearize(&self, tim: u32) -> Option<Motion> {
 		if tim <= self.f[0].ts {
 			return Some(Motion(
 				self.f[0].acc,

@@ -67,8 +67,8 @@ impl Model {
 
 		kin[2] += G_SI_NED;
 
-		for i in 0..3 {
-			self.s.vel[i] += kin[i] * dt;
+		for (i, val) in kin.iter().enumerate() {
+			self.s.vel[i] += val * dt;
 			self.s.pos[i] += self.s.vel[i] * dt;
 		}
 

@@ -1,7 +1,7 @@
-use libm::powf;
+use core::f32::consts::FRAC_1_SQRT_2;
 
-use crate::{Alignment, Bias, ODR, config::{Collector, Disperser, SyntheticSensor}, math::{SquareMatrix, ceil, leash}};
-use crate::math::RandomArray;
+use crate::{Alignment, Bias, ODR, config::{Collector, Disperser, SyntheticSensor}, math::{Blend, Hyperbolic, SchilckBias, SquareMatrix, ceil, interpolate, leash}};
+use crate::math::Randomize;
 
 pub trait SimBuilder {
 	type InputParams;
@@ -29,7 +29,7 @@ impl<const N: usize> SensorConf<N> {
 		Self {
 			odr,
 			cutoff: 100.0,
-			qbw: 0.7071,
+			qbw: FRAC_1_SQRT_2,
 			firsens: None,
 			sigma: 0.005,
 			bias: [0.0; N],
@@ -44,7 +44,10 @@ impl<const N: usize> SensorConf<N> {
 				odr: self.odr,
 				cutoff: self.cutoff,
 				qbw: self.qbw,
-				sens: self.firsens.unwrap_or(self.odr as f32 * 10_000.0)
+				sens: self.firsens.unwrap_or(
+					(self.odr as f32 * 10_000.0)
+					.clamp(10_000.0, 700_000.0)
+				)
 			},
 			m: Disperser {
 				sigma: self.sigma,
@@ -55,13 +58,20 @@ impl<const N: usize> SensorConf<N> {
 		}
 	}
 
-	fn linear_tune(&mut self, deg: f32) {
-		self.cutoff -= 80.0 * deg;
-		self.qbw -= 0.2071 * deg;
-		self.firsens = Some(100_000.0 * (1.0 - deg));
-		self.sigma *= powf(10.0, 2.0 * deg);
-		self.bias = self.bias.randomize(deg);
-		self.align = self.align.randomize(deg);
+	// TODO 1: maybe split params depending on 1.0 - d from those depending on d.
+	// Currently this inverts the intent if blending fn is non-symmetrical.
+	//
+	// TODO 2: test if this is enough input per sensor. Maybe split all params??
+	fn decay<B: Blend>(&mut self, d: f32, k: f32) {
+		let i = 1.0 - d;
+		
+		self.cutoff = interpolate::<B>(100.0, 20.0, i, k);
+		self.qbw = interpolate::<B>(FRAC_1_SQRT_2, 0.5, i, k);
+		self.firsens = Some(interpolate::<B>(700_000.0, 5_000.0, i, k));
+
+		self.sigma = interpolate::<B>(0.1, 0.0005, d, k);
+		self.bias = self.bias.randomize(d);
+		self.align = self.align.randomize(d);
 	}
 }
 
@@ -138,18 +148,18 @@ impl SimBuilder for SkewedIMU {
 	}
 
 	fn imu(&mut self) -> [SyntheticSensor<3>; 3] {
-		self.m.acc.linear_tune(leash(self.deg, 0.05));
-		self.m.gyr.linear_tune(leash(self.deg, 0.05));
-		self.m.mag.linear_tune(leash(self.deg, 0.05));
+		self.m.acc.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
+		self.m.gyr.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
+		self.m.mag.decay::<SchilckBias>(leash(self.deg, 0.02), 0.5);
 
-		self.m.acc.sens = Some(self.deg / 5.0 + 0.0005);
-		self.m.gyr.sens = Some(self.deg / 200.0 + 0.00001);
+		self.m.acc.sens = Some(0.0005 + 0.2 * self.deg);
+		self.m.gyr.sens = Some(0.00001 + 0.005 * self.deg);
 
 		self.m.imu()
 	}
 
 	fn baro(&mut self) -> SyntheticSensor<1> {
-		self.m.bar.linear_tune(self.deg / 10.0);
+		self.m.bar.decay::<Hyperbolic>(0.1 * self.deg, 0.05);
 		self.m.baro()
 	}
 }
