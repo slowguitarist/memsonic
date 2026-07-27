@@ -1,12 +1,28 @@
 use libm::{expf};
 
 use crate::Alignment;
+use crate::Bias;
 use crate::XYZ;
-use crate::config::*;
+use crate::common::*;
 use crate::filters::BiquadType::LowPass;
 use crate::math::*;
 use crate::model::*;
 use crate::filters::*;
+
+#[derive(Clone, Copy)]
+pub(crate) struct Collector {
+	pub(crate) odr: u32,
+	pub(crate) cutoff: f32,
+	pub(crate) qbw: f32,
+	pub(crate) sens: f32
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Disperser<const N: usize> {
+	pub(crate) sigma: f32,
+	pub(crate) bias: Bias<N>,
+	pub(crate) align: Alignment<N>,
+}
 
 pub(crate) trait NoiseMode {}
 
@@ -77,7 +93,7 @@ impl<const N: usize> SensorCore<N> {
 }
 
 impl<const N: usize> SensorCore<N> {
-	fn gather(&mut self, mut n: impl Iterator<Item = f32>) {
+	fn collect(&mut self, mut n: impl Iterator<Item = f32>) {
 		for i in 0..N {
 			let samp = n.next().expect("Sensor axes must be equal");
 
@@ -105,7 +121,7 @@ impl<const N: usize> BiasedAxis<N> {
 }
 
 impl<const N: usize> BiasedAxis<N> {
-	fn scatter(&mut self, phys: &[f32; N]) -> impl Iterator<Item = f32> {
+	fn disperse(&mut self, phys: &[f32; N]) -> impl Iterator<Item = f32> {
 		self.align.iter()
 			.zip(self.bias.iter().copied())
 			.map(|(axis, bias)| {
@@ -149,7 +165,7 @@ impl Accelerometer {
 impl Evaluate for Accelerometer {
 	fn evaluate(&mut self, s: &ModelState) -> &Self {
 		self.m.ng.0 = s.vib * self.vibsens;
-		self.k.gather(self.m.scatter(&s.acc));
+		self.k.collect(self.m.disperse(&s.acc));
 		self
 	}
 }
@@ -182,7 +198,7 @@ impl Gyroscope {
 
 impl Evaluate for Gyroscope {
 	fn evaluate(&mut self, s: &ModelState) -> &Self {
-		self.k.gather(self.m.scatter(&s.ang)
+		self.k.collect(self.m.disperse(&s.ang)
 			.zip(s.acc.iter().copied())
 			.map(|(raw, acc)| {
 				raw + acc * self.gsens
@@ -218,7 +234,7 @@ impl Magnetometer {
 impl Evaluate for Magnetometer {
 	fn evaluate(&mut self, s: &ModelState) -> &Self {
 		let bodyf = s.q.rotate_w2b(EARTH_MAGFIELD);
-		self.k.gather(self.m.scatter(&bodyf));
+		self.k.collect(self.m.disperse(&bodyf));
 		self
 	}
 }
@@ -268,7 +284,7 @@ impl Evaluate for Barometer {
 		let prs = [ s.prs + shock + drift + self.bias +
 			<Gaussian as Distort<f32, Normal>>::distort(&self.ng) ];
 
-		self.k.gather(prs.iter().copied());
+		self.k.collect(prs.iter().copied());
 		self
 	}
 }

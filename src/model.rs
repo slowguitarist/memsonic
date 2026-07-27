@@ -1,6 +1,6 @@
 use libm::powf;
 
-use crate::{XYZ, config::{G_SI_NED, LAPSE_RT, MAX_SUBNATICA, R_EXP, SEA_PRS, SEA_TMP, SyntheticSensor}, math::{Quaternion, Vector, sq}, Motion, sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer}};
+use crate::{Motion, XYZ, builder::SyntheticSensor, common::{G_SI_NED, LAPSE_RT, MAX_SUBNATICA, R_EXP, SEA_PRS, SEA_TMP}, math::{Quaternion, Vector, sq}, sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer}};
 
 pub(crate) struct ModelState {
 	pub(crate) acc: XYZ,

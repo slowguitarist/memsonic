@@ -1,37 +1,77 @@
-#![no_std]
-#![no_main]
+//! # memsonic
+//! 
+//! MEMS sensor simulation engine for high-power rocketry.
 
-use crate::{builder::SimBuilder, model::Model, profile::CannedProfile, sensors::Extract};
+#![no_std]
+
+use crate::{
+	builder::SimBuilder,
+	model::Model,
+	profile::CannedProfile,
+	sensors::Extract
+};
 
 mod filters;
 mod model;
 mod sensors;
-mod config;
+mod common;
 mod math;
 mod profile;
 
 pub mod builder;
 
+/////////////////////////////////////////////////////////////////////////////
+// Public helper types
+/////////////////////////////////////////////////////////////////////////////
+
+/// A real vector in 3D.
 pub type XYZ = [f32; 3];
 
+/// Combined output data rates for accelerometer, gyroscope,
+/// magnetometer, and barometer (in this order).
 pub type ODR = (u32, u32, u32, u32);
 
+/// Bias value for each of N measurement axes.
+pub type Bias<const N: usize> = [f32; N];
+
+/// An N by N matrix for each axis' alignment.
+pub type Alignment<const N: usize> = [Bias<N>; N];
+
+/// A theoretical kinematic target (acceleration, angular velocity).
 #[derive(Clone, Copy)]
 pub struct Motion(pub XYZ, pub XYZ);
 
-pub type Bias<const N: usize> = [f32; N];
+/// DRY getter.
+macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
+	#[doc = concat!("
+	Returns a result that always contains the most recent ", $n, "
+	 reading from the simulation. `Ok` indicates that the reading
+	is new and `Err` -- that it did not change since last call.
+	
+	A call to this function lazily evaluates the engine's state
+	since the last call to any of the [`Simulation`] methods.
+	
+	## Examples
+	
+	Assume a builder `sim` previously created and populated
+	with kinematic targets, and current time `now`, in ms.
+	
+	```
+	if let Ok(reading) = sim.", stringify!($f),"(now) {
+		// consume reading
+	}
+	```
+	")]
+	pub fn $f(&mut self, tim: u32) -> Result<$t, $t> {
+		self.step(tim)
+			.map(|_| self.m.$d.extract())
+			.map_err(|_| self.m.$d.extract())
+	}
+));
 
-pub type Alignment<const N: usize> = [Bias<N>; N];
-
-macro_rules! getter {
-	($name:ident, $field:ident, $type:ident) => {
-		pub fn $name(&mut self, tim: u32) -> Result<$type, $type> {
-			self.step(tim)
-				.map(|_| self.m.$field.extract())
-				.map_err(|_| self.m.$field.extract())
-		}
-	};
-}
+/////////////////////////////////////////////////////////////////////////////
+// Simulation
+/////////////////////////////////////////////////////////////////////////////
 
 pub struct Simulation<const N: usize> {
 	m: Model,
@@ -67,10 +107,10 @@ impl<const N: usize> Simulation<N> {
 	/// 
 	/// ## Examples
 	/// 
-	/// Assume a builder `bob` previously created.
+	/// Assume a builder `b` previously created.
 	/// 
 	/// ```
-	/// let sim = Simulation::new(bob, 1000);
+	/// let sim = Simulation::new(b, 1000);
 	/// sim
 	///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
 	///     .fix(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
@@ -94,10 +134,10 @@ impl<const N: usize> Simulation<N> {
 	/// 
 	/// ## Examples
 	/// 
-	/// Assume a builder `bob` previously created.
+	/// Assume a builder `b` previously created.
 	/// 
 	/// ```
-	/// let sim = Simulation::new(bob, 1000);
+	/// let sim = Simulation::new(b, 1000);
 	/// sim
 	///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
 	///     .add(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
@@ -112,6 +152,8 @@ impl<const N: usize> Simulation<N> {
 		self
 	}
 
+	/// Breaks elapsed time into equal intervals equal to engine rate
+	/// and calls derivation logic multiple times. Lazy.
 	fn step(&mut self, mut tim: u32) -> Result<(), ()> {
 		if tim > self.delay {
 			tim -= self.delay;
@@ -135,8 +177,8 @@ impl<const N: usize> Simulation<N> {
 		Err(())
 	}
 
-	getter!(accel, acl, XYZ);
-	getter!(angvel, gyr, XYZ);
-	getter!(magfield, mag, XYZ);
-	getter!(pressure, bar, f32);
+	getter!("accelerometer", accel, acl, XYZ);
+	getter!("gyroscope", angvel, gyr, XYZ);
+	getter!("magnetometer", magfield, mag, XYZ);
+	getter!("barometer", pressure, bar, f32);
 }

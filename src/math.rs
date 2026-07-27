@@ -1,6 +1,6 @@
 use libm::{cosf, powf, tanhf};
 
-use crate::{Alignment, Bias, XYZ, config::rand};
+use crate::{Alignment, Bias, XYZ, common::rand};
 use core::{f32::consts::PI, array::from_fn};
 
 /////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,7 @@ pub(crate) const fn ceil(x: f32) -> f32 {
 
 #[inline(always)]
 pub(crate) const fn basically1(x: f32) -> bool {
-	fabs(x - 1.0) < crate::config::TOLER
+	fabs(x - 1.0) < crate::common::TOLER
 }
 
 #[inline(always)]
