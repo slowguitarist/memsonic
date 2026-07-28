@@ -72,7 +72,8 @@ struct SensorCore<const N: usize> {
 	biq: BiquadCoef,
 	fir: [EmuCIC; N],
 	iir: [Biquad; N],
-	meas: [f32; N]
+	meas: [f32; N],
+	rel: bool
 }
 
 impl<const N: usize> SensorCore<N> {
@@ -87,7 +88,8 @@ impl<const N: usize> SensorCore<N> {
 			biq: BiquadCoef::derive(biqtype, odr as f32),
 			fir: [EmuCIC::new(); N],
 			iir: [Biquad::new(); N],
-			meas: [0.0; N]
+			meas: [0.0; N],
+			rel: false
 		}
 	}
 }
@@ -98,6 +100,7 @@ impl<const N: usize> SensorCore<N> {
 			let samp = n.next().expect("Sensor axes must be equal");
 
 			if let Some(dec) = self.fir[i].filter(&self.cic, samp) {
+				self.rel = true;
 				self.meas[i] = self.iir[i].filter(&self.biq, dec);
 			}
 		}
@@ -291,14 +294,19 @@ impl Evaluate for Barometer {
 
 // FIXME replace crutch with something better
 pub(crate) trait Extract<T> {
-	fn extract(&self) -> T;
+	fn extract(&mut self) -> Result<T, T>;
 }
 
 macro_rules! extract3axis {
 	($sensor:ident) => {
 		impl Extract<XYZ> for $sensor {
-			fn extract(&self) -> XYZ {
-				self.k.meas
+			fn extract(&mut self) -> Result<XYZ, XYZ> {
+				if self.k.rel {
+					self.k.rel = false;
+					Ok(self.k.meas)
+				} else {
+					Err(self.k.meas)
+				}
 			}
 		}
 	};
@@ -309,7 +317,12 @@ extract3axis!(Gyroscope);
 extract3axis!(Magnetometer);
 
 impl Extract<f32> for Barometer {
-	fn extract(&self) -> f32 {
-		self.k.meas[0]
+	fn extract(&mut self) -> Result<f32, f32> {
+		if self.k.rel {
+			self.k.rel = false;
+			Ok(self.k.meas[0])
+		} else {
+			Err(self.k.meas[0])
+		}
 	}
 }

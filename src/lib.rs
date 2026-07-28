@@ -57,15 +57,13 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 	with kinematic targets, and current time `now`, in ms.
 	
 	```
-	if let Ok(reading) = sim.", stringify!($f),"(now) {
+	if let Ok(reading) = sim.", stringify!($f), "(now) {
 		// consume reading
 	}
 	```
 	")]
 	pub fn $f(&mut self, tim: u32) -> Result<$t, $t> {
-		self.step(tim)
-			.map(|_| self.m.$d.extract())
-			.map_err(|_| self.m.$d.extract())
+		self.step(tim).m.$d.extract()
 	}
 ));
 
@@ -154,13 +152,13 @@ impl<const N: usize> Simulation<N> {
 
 	/// Breaks elapsed time into equal intervals equal to engine rate
 	/// and calls derivation logic multiple times. Lazy.
-	fn step(&mut self, mut tim: u32) -> Result<(), ()> {
+	fn step(&mut self, mut tim: u32) -> &mut Self {
 		if tim > self.delay {
 			tim -= self.delay;
 		}
 		
 		if tim.wrapping_sub(self.tim) < self.rate {
-			return Err(())
+			return self
 		}
 
 		if let Some(target) = self.p.linearize(tim) {
@@ -170,11 +168,9 @@ impl<const N: usize> Simulation<N> {
 				self.tim = self.tim.wrapping_add(self.rate);
 				self.m.derive(secs, target);
 			}
-
-			return Ok(())
 		}
 
-		Err(())
+		self
 	}
 
 	getter!("accelerometer", accel, acl, XYZ);
