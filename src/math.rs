@@ -61,14 +61,14 @@ pub(crate) fn invsqrt(x: f32) -> Option<f32> {
 	}
 }
 
-pub(crate) fn interpolate<B: Blend>(
+pub(crate) fn interpolate(
+	b: impl Blend,
 	x1: f32,
 	x0: f32,
-	d: f32,
-	k: f32
+	x: f32,
 ) -> f32 {
 	assert!(x0 < x1);
-	x0 + (x1 - x0) * B::default().blend(d.clamp(0.0, 1.0), k)
+	x0 + (x1 - x0) * b.blend(x.clamp(0.0, 1.0))
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -86,6 +86,13 @@ pub(crate) trait Vector
 pub(crate) trait Randomize<const N: usize>
 	where Self: Copy
 {
+	/// The behavior of this function is entirely implementation-defined;
+	/// the trait only defines the API for static dispatch.
+	/// 
+	/// `d` represents "the degree of randomness" from 0 to 1, where 1 is
+	/// most random. It is up to the implementation to trim values of `d`
+	/// as well as to determine a function that calculates randomness
+	/// from `d`.
 	fn randomize(self, d: f32) -> Self;
 }
 
@@ -96,9 +103,15 @@ pub(crate) trait SquareMatrix<const N: usize>
 }
 
 pub(crate) trait Blend
-	where Self: Copy + Default
+	where Self: Copy
 {
-	fn blend(self, t: f32, k: f32) -> f32;
+	type Params;
+
+	fn new(p: Self::Params) -> Self;
+
+	/// Takes a normalized input `t` and a curvature `k`, and applies
+	/// a smooth function with the output range between 0 and 1.
+	fn blend(&self, x: f32) -> f32;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -154,46 +167,92 @@ impl<const N: usize> Randomize<N> for Alignment<N> {
 }
 
 #[allow(unused)]
-#[derive(Default, Clone, Copy)]
-pub(crate) struct SchilckBias;
+#[derive(Clone, Copy)]
+pub(crate) struct Barron {
+	s: f32,
+	t: f32
+}
 
-impl Blend for SchilckBias {
-	fn blend(self, t: f32, k: f32) -> f32 {
-		t / ((1.0 / k.clamp(0.0, 1.0) - 2.0) * (1.0 - t) + 1.0)
+impl Blend for Barron {
+	type Params = (f32, f32);
+
+	fn new(p: Self::Params) -> Self {
+		Self {
+			s: p.0.clamp(0.0, 1e5),
+			t: p.1.clamp(0.0, 1.0)
+		}
+	}
+
+	fn blend(&self, x: f32) -> f32 {
+		let c = self.s * (self.t - x);
+
+		if x < self.t {
+			self.t * x / (x + c + 1e-5)
+		} else {
+			(1.0 - self.t) * (x - 1.0) / (1.0 - x - c + 1e-5)
+		}
 	}
 }
 
 #[allow(unused)]
 #[derive(Default, Clone, Copy)]
-pub(crate) struct TrigIncr;
+pub(crate) struct TrigIncr {
+	k: f32
+}
 
 impl Blend for TrigIncr {
-	fn blend(self, t: f32, k: f32) -> f32 {
-		0.5 * (1.0 - cosf(PI * powf(t, fabs(k))))
+	type Params = f32;
+
+	fn new(p: Self::Params) -> Self {
+		Self { k: p }
+	}
+
+	fn blend(&self, x: f32) -> f32 {
+		0.5 * (1.0 - cosf(PI * powf(x, fabs(self.k))))
 	}
 }
 
 #[allow(unused)]
 #[derive(Default, Clone, Copy)]
-pub(crate) struct TrigDecr;
+pub(crate) struct TrigDecr {
+	k: f32
+}
 
 impl Blend for TrigDecr {
-	fn blend(self, t: f32, k: f32) -> f32 {
-		0.5 * (1.0 + cosf(PI * powf(t, fabs(k))))
+	type Params = f32;
+
+	fn new(p: Self::Params) -> Self {
+		Self { k: p }
+	}
+
+	fn blend(&self, x: f32) -> f32 {
+		0.5 * (1.0 + cosf(PI * powf(x, fabs(self.k))))
 	}
 }
 
 #[allow(unused)]
 #[derive(Default, Clone, Copy)]
-pub(crate) struct Hyperbolic;
+pub(crate) struct Hyperbolic {
+	k: f32
+}
 
 impl Blend for Hyperbolic {
-	fn blend(self, t: f32, k: f32) -> f32 {
-		if let -1.0..=1.0 = k {
-			return t
+	type Params = f32;
+
+	fn new(p: Self::Params) -> Self {
+		if let -1.0..=1.0 = p {
+			Self { k: 0.0 }
+		} else {
+			Self { k: p }
 		}
-		let kh = 0.5 * k;
-		0.5 * (1.0 + tanhf(k * t - kh) / tanhf(kh))
+	}
+
+	fn blend(&self, x: f32,) -> f32 {
+		if self.k == 0.0 {
+			return x
+		}
+		let kh = 0.5 * self.k;
+		0.5 * (1.0 + tanhf(self.k * x - kh) / tanhf(kh))
 	}
 }
 

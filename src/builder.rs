@@ -12,7 +12,7 @@
 use core::f32::consts::FRAC_1_SQRT_2;
 use crate::{
 	Alignment, Bias, ODR,
-	math::{Blend, Hyperbolic, Randomize, SchilckBias, SquareMatrix},
+	math::{Blend, Hyperbolic, Randomize, Barron, SquareMatrix},
 	math::{ceil, interpolate},
 	sensors::{Collector, Disperser}
 };
@@ -116,12 +116,12 @@ impl<const N: usize> SensorConf<N> {
 	/// 
 	/// Returns a unique reference to [`SensorConf`] for chaining
 	/// other filters.
-	fn decay<B: Blend>(&mut self, d: f32, k: f32) -> &mut Self {
-		let i = 1.0 - d;
+	fn decay(&mut self, b: impl Blend, x: f32) -> &mut Self {
+		let i = 1.0 - x;
 		
-		self.cutoff = interpolate::<B>(100.0, 20.0, i, k);
-		self.qbw = interpolate::<B>(FRAC_1_SQRT_2, 0.5, i, k);
-		self.firsens = Some(interpolate::<B>(700_000.0, 5_000.0, i, k));
+		self.cutoff = interpolate(b, 100.0, 20.0, i);
+		self.qbw = interpolate(b, FRAC_1_SQRT_2, 0.5, i);
+		self.firsens = Some(interpolate(b, 700_000.0, 5_000.0, i));
 		self
 	}
 	
@@ -129,10 +129,10 @@ impl<const N: usize> SensorConf<N> {
 	/// 
 	/// Returns a unique reference to [`SensorConf`] for chaining
 	/// other filters.
-	fn disperse<B: Blend>(&mut self, d: f32, k: f32) -> &mut Self {
-		self.sigma = interpolate::<B>(0.1, 0.0005, d, k);
-		self.bias = self.bias.randomize(d);
-		self.align = self.align.randomize(d);
+	fn disperse(&mut self, b: impl Blend, x: f32) -> &mut Self {
+		self.sigma = interpolate(b, 0.1, 0.0005, x);
+		self.bias = self.bias.randomize(x);
+		self.align = self.align.randomize(x);
 		self
 	}
 }
@@ -239,15 +239,11 @@ impl SimBuilder for SkewedIMU {
 	}
 
 	fn imu(&mut self) -> [SyntheticSensor<3>; 3] {
-		self.m.acc
-			.decay::<SchilckBias>(self.d, 0.5)
-			.disperse::<SchilckBias>(self.d, 0.5);
-		self.m.gyr
-			.decay::<SchilckBias>(self.d, 0.5)
-			.disperse::<SchilckBias>(self.d, 0.5);
-		self.m.mag
-			.decay::<SchilckBias>(self.d, 0.5)
-			.disperse::<SchilckBias>(self.d, 0.5);
+		let b = Barron::new((1.8, 0.4));
+
+		self.m.acc.decay(b, self.d).disperse(b, self.d);
+		self.m.gyr.decay(b, self.d).disperse(b, self.d);
+		self.m.mag.decay(b, self.d).disperse(b, self.d);
 
 		self.m.acc.sens = Some(0.0005 + 0.2 * self.d);
 		self.m.gyr.sens = Some(0.00001 + 0.005 * self.d);
@@ -256,9 +252,9 @@ impl SimBuilder for SkewedIMU {
 	}
 
 	fn baro(&mut self) -> SyntheticSensor<1> {
-		self.m.bar
-			.decay::<Hyperbolic>(0.05 * self.d, 0.05)
-			.disperse::<Hyperbolic>(0.05 * self.d, 0.05);
+		let b = Hyperbolic::new(4.0);
+
+		self.m.bar.decay(b, 0.05 * self.d).disperse(b, 0.05 * self.d);
 
 		self.m.baro()
 	}
