@@ -1,5 +1,5 @@
 //! # common
-//! 
+//!
 //! Commonly used constants and global functions
 
 use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
@@ -27,16 +27,18 @@ pub(crate) const TOLER: f32 = 1e-3;
 
 /// Returns a pseudo-random 32-bit unsigned integer.
 pub(crate) fn rand() -> u32 {
-	// I, undersigned, voluntarily give up any notion of order, total or partial,
-	// on this piece of memory. Here it is sufficient for a thread of execution to
-	// observe at least its own writes, and acceptable if different threads end up
-	// hammering the same values on their respective cache lines before syncing.
-	static STATE: AtomicU32 = AtomicU32::new(0xdeadfa11);
+    // I, undersigned, voluntarily give up any notion of order, total or partial,
+    // on this piece of memory. Here it is sufficient for a thread of execution to
+    // observe at least its own writes, and acceptable if different threads end up
+    // hammering the same values on their respective cache lines before syncing.
+    static STATE: AtomicU32 = AtomicU32::new(0xdeadfa11);
 
-	STATE.try_update(Relaxed, Relaxed, |mut v| {
-		v ^= v << 13;
-		v ^= v >> 17;
-		v ^= v << 5;
-		Some(v)
-	}).unwrap_or(0xf70a57ed)
+    STATE
+        .try_update(Relaxed, Relaxed, |mut v| {
+            v ^= v << 13;
+            v ^= v >> 17;
+            v ^= v << 5;
+            Some(v)
+        })
+        .unwrap_or(0xf70a57ed)
 }
