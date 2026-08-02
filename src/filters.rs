@@ -31,7 +31,6 @@ pub(crate) trait Filter<T: Copy, U: Copy> {
     fn filter(&mut self, conf: &Self::SensorParams, sample: T) -> U;
 }
 
-// TODO implement variant selection in builder
 #[allow(dead_code)]
 pub(crate) enum BiquadType {
     LowPass(f32, f32),

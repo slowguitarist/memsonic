@@ -1,3 +1,10 @@
+//! # profile
+//!
+//! This module is a storage unit for the user's flight points.
+//! It includes a time-based "dispenser" that provides the engine's
+//! model with a flight plan by interpolating between two points
+//! on the user's graph.
+
 use crate::{Motion, XYZ, math::Vector};
 
 #[derive(Clone, Copy, Default)]
@@ -40,7 +47,7 @@ impl<const N: usize> CannedProfile<N> {
 
     pub(crate) fn linearize(&self, tim: u32) -> Option<Motion> {
         if tim <= self.f[0].ts {
-            return Some(Motion(self.f[0].acc, self.f[0].ang));
+            return Some((self.f[0].acc, self.f[0].ang));
         } else if tim >= self.f[self.count - 1].ts {
             return None;
         }
@@ -54,6 +61,6 @@ impl<const N: usize> CannedProfile<N> {
         let p1 = &self.f[i + 1];
         let k = (tim - p0.ts) as f32 / (p1.ts - p0.ts) as f32;
 
-        Some(Motion(p0.acc.lerp(p1.acc, k), p0.ang.lerp(p1.ang, k)))
+        Some((p0.acc.lerp(p1.acc, k), p0.ang.lerp(p1.ang, k)))
     }
 }

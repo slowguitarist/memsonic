@@ -1,12 +1,20 @@
-use libm::{cosf, powf, tanhf};
+//! # math
+//!
+//! A collection is scalar, vector, and matrix API
+//! specific to the simulation.
 
-use crate::{Alignment, Bias, XYZ, common::rand};
+use crate::{
+    Alignment, Bias, XYZ,
+    env::{TOLER, rand},
+};
 use core::{array::from_fn, f32::consts::PI};
+use libm::{cosf, powf, tanhf};
 
 /////////////////////////////////////////////////////////////////////////////
 // Functions on f32
 /////////////////////////////////////////////////////////////////////////////
 
+#[inline(always)]
 pub(crate) fn leash(pt: f32, d: f32) -> f32 {
     let r = rand();
     pt + d * f32::from_bits((r >> 9) | 0x3f000000 | (r << 31))
@@ -29,7 +37,7 @@ pub(crate) const fn ceil(x: f32) -> f32 {
 
 #[inline(always)]
 pub(crate) const fn basically1(x: f32) -> bool {
-    fabs(x - 1.0) < crate::common::TOLER
+    fabs(x - 1.0) < TOLER
 }
 
 #[inline(always)]
@@ -61,6 +69,7 @@ pub(crate) fn invsqrt(x: f32) -> Option<f32> {
     }
 }
 
+#[inline(always)]
 pub(crate) fn interpolate(b: impl Blend, x1: f32, x0: f32, x: f32) -> f32 {
     assert!(x0 < x1);
     x0 + (x1 - x0) * b.blend(x.clamp(0.0, 1.0))

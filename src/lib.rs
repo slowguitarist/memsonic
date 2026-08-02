@@ -4,9 +4,10 @@
 
 #![no_std]
 
-use crate::{builder::SimBuilder, model::Model, profile::CannedProfile, sensors::Consume};
+use crate::{
+    builder::SimBuilder, env::Setup, model::Model, profile::CannedProfile, sensors::Consume,
+};
 
-mod common;
 mod filters;
 mod math;
 mod model;
@@ -14,6 +15,7 @@ mod profile;
 mod sensors;
 
 pub mod builder;
+pub mod env;
 
 /////////////////////////////////////////////////////////////////////////////
 // Public helper types
@@ -22,7 +24,7 @@ pub mod builder;
 /// A real vector in 3D.
 pub type XYZ = [f32; 3];
 
-/// Combined output data rates for accelerometer, gyroscope,
+/// Output data rates for accelerometer, gyroscope,
 /// magnetometer, and barometer (in this order).
 pub type ODR = (u32, u32, u32, u32);
 
@@ -33,8 +35,7 @@ pub type Bias<const N: usize> = [f32; N];
 pub type Alignment<const N: usize> = [Bias<N>; N];
 
 /// A theoretical kinematic target (acceleration, angular velocity).
-#[derive(Clone, Copy)]
-pub struct Motion(pub XYZ, pub XYZ);
+pub type Motion = (XYZ, XYZ);
 
 /// DRY getter.
 macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
@@ -82,10 +83,10 @@ impl<const N: usize> Simulation<N> {
     /// `delay` specifies the time during which no work should be done
     /// towards kinematic targets. This is useful to simulate inherent
     /// sensor drift while a vehicle is stationary.
-    pub fn new(mut b: impl SimBuilder, delay: u32) -> Self {
+    pub fn new<S: Setup>(mut b: impl SimBuilder, delay: u32) -> Self {
         let rate = b.rate();
         Self {
-            m: Model::new(rate, b.imu(), b.baro()),
+            m: Model::new(rate, b.imu(), b.baro(), S::setup()),
             p: CannedProfile::new(delay),
             tim: 0,
             delay,

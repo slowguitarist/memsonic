@@ -1,12 +1,16 @@
-use libm::powf;
+//! # model
+//!
+//! A small self-propagating physics model whose only purpose
+//! is to serve as a reference point for sensor evaluations.
 
 use crate::{
     Motion, XYZ,
     builder::SyntheticSensor,
-    common::{G_SI_NED, LAPSE_RT, MAX_SUBNATICA, R_EXP, SEA_PRS, SEA_TMP},
+    env::{Conditions, LAPSE_RT, MAX_SUBNATICA, Surface},
     math::{Quaternion, Vector, sq},
     sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer},
 };
+use libm::powf;
 
 pub(crate) struct ModelState {
     pub(crate) acc: XYZ,
@@ -17,19 +21,21 @@ pub(crate) struct ModelState {
     pub(crate) tmp: f32,
     pub(crate) vib: f32,
     pub(crate) q: Quaternion,
+    pub(crate) env: Conditions,
 }
 
 impl ModelState {
-    fn new() -> Self {
+    fn new(mag: XYZ, sea_tmp: f32, sea_prs: f32) -> Self {
         Self {
             acc: XYZ::default(),
             ang: XYZ::default(),
             vel: XYZ::default(),
             pos: XYZ::default(),
-            prs: SEA_PRS,
-            tmp: SEA_TMP,
+            prs: sea_prs,
+            tmp: sea_tmp,
             vib: 0.0,
             q: Quaternion::new(),
+            env: Conditions::new(mag, sea_prs, sea_tmp),
         }
     }
 }
@@ -43,13 +49,18 @@ pub(crate) struct Model {
 }
 
 impl Model {
-    pub(crate) fn new(rate: u32, imu: [SyntheticSensor<3>; 3], bar: SyntheticSensor<1>) -> Self {
+    pub(crate) fn new(
+        rate: u32,
+        imu: [SyntheticSensor<3>; 3],
+        bar: SyntheticSensor<1>,
+        site: Surface,
+    ) -> Self {
         Self {
-            s: ModelState::new(),
+            s: ModelState::new(site.mag, site.tmp, site.prs),
             acl: Accelerometer::new(rate, imu[0].s.unwrap_or(0.0005), imu[0].k, imu[0].m),
             gyr: Gyroscope::new(rate, imu[1].s.unwrap_or(0.00001), imu[1].k, imu[1].m),
             mag: Magnetometer::new(rate, imu[2].k, imu[2].m),
-            bar: Barometer::new(rate, bar.k, bar.m),
+            bar: Barometer::new(rate, bar.k, bar.m, site.tmp),
         }
     }
 
@@ -59,7 +70,7 @@ impl Model {
 
         let mut kin = self.s.q.integrate(self.s.ang, dt).rotate_b2w(self.s.acc);
 
-        kin[2] += G_SI_NED;
+        kin[2] += self.s.env.g_si_ned;
 
         for (i, val) in kin.iter().enumerate() {
             self.s.vel[i] += val * dt;
@@ -72,8 +83,8 @@ impl Model {
             -self.s.pos[2]
         };
 
-        self.s.tmp = SEA_TMP - LAPSE_RT * alt;
-        self.s.prs = SEA_PRS * powf(self.s.tmp / SEA_TMP, R_EXP);
+        self.s.tmp = self.s.env.sea_tmp - LAPSE_RT * alt;
+        self.s.prs = self.s.env.sea_prs * powf(self.s.tmp / self.s.env.sea_tmp, self.s.env.r_exp);
 
         let v_sq = sq(self.s.vel[0]) + sq(self.s.vel[1]) + sq(self.s.vel[2]);
         self.s.vib = 1.0 + 0.005 * self.s.acc.norm() + 0.0001 * v_sq;

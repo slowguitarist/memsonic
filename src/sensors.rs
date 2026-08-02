@@ -1,13 +1,22 @@
-use libm::expf;
+//! # sensors
+//!
+//! A flow of data through a sensor is generalized by two operations:
+//! "disperese" and "collect". The former adds noise and applies bias,
+//! and the latter provides oversampling by spinning the FIR-IIR state
+//! machine.
 
-use crate::Alignment;
-use crate::Bias;
-use crate::XYZ;
-use crate::common::*;
-use crate::filters::BiquadType::LowPass;
-use crate::filters::*;
-use crate::math::*;
-use crate::model::*;
+use crate::{
+    Alignment, Bias, XYZ,
+    env::{DRIFT_PER_C, SHOCK_DEPTH, SP_GAS, SP_HEAT, rand},
+    filters::{
+        Biquad, BiquadCoef,
+        BiquadType::{self, LowPass},
+        CICConf, EmuCIC, Filter,
+    },
+    math::{Vector, sq, sqrt},
+    model::ModelState,
+};
+use libm::expf;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Collector {
@@ -23,6 +32,10 @@ pub(crate) struct Disperser<const N: usize> {
     pub(crate) bias: Bias<N>,
     pub(crate) align: Alignment<N>,
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// Gaussian-like noise generator
+/////////////////////////////////////////////////////////////////////////////
 
 pub(crate) trait NoiseMode {}
 
@@ -62,6 +75,10 @@ impl Distort<f32, Fast> for Gaussian {
         (s as f32 - 1530.0) / 256.0 * self.0
     }
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// Sensor implementations
+/////////////////////////////////////////////////////////////////////////////
 
 pub(crate) trait Evaluate {
     fn evaluate(&mut self, s: &ModelState) -> &Self;
@@ -203,7 +220,7 @@ impl Magnetometer {
 
 impl Evaluate for Magnetometer {
     fn evaluate(&mut self, s: &ModelState) -> &Self {
-        let bodyf = s.q.rotate_w2b(EARTH_MAGFIELD);
+        let bodyf = s.q.rotate_w2b(s.env.mag);
         self.k.collect(self.m.disperse(&bodyf));
         self
     }
@@ -218,13 +235,23 @@ pub(crate) struct Barometer {
 }
 
 impl Barometer {
-    pub(crate) fn new(engrate: u32, k: Collector, m: Disperser<1>) -> Self {
+    pub(crate) fn new(
+        sim_rate: u32,
+        filters: Collector,
+        noise: Disperser<1>,
+        sea_tmp: f32,
+    ) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw), k.sens),
-            ng: Gaussian(m.sigma),
-            bias: m.bias[0],
-            lag: m.align[0][0],
-            tmp: SEA_TMP,
+            k: SensorCore::new(
+                filters.odr,
+                sim_rate,
+                LowPass(filters.cutoff, filters.qbw),
+                filters.sens,
+            ),
+            ng: Gaussian(noise.sigma),
+            bias: noise.bias[0],
+            lag: noise.align[0][0],
+            tmp: sea_tmp,
         }
     }
 }
@@ -253,7 +280,10 @@ impl Evaluate for Barometer {
     }
 }
 
-// FIXME replace crutch with something better
+/////////////////////////////////////////////////////////////////////////////
+// API extension
+/////////////////////////////////////////////////////////////////////////////
+
 pub(crate) trait Consume<T> {
     fn consume(&mut self) -> Result<T, T>;
 }
