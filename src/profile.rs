@@ -5,7 +5,10 @@
 //! model with a flight plan by interpolating between two points
 //! on the user's graph.
 
-use crate::{Motion, XYZ, math::Vector};
+use crate::{XYZ, math::Vector};
+
+/// A theoretical kinematic target (acceleration, angular velocity).
+pub(crate) type Motion = (XYZ, XYZ);
 
 #[derive(Clone, Copy, Default)]
 struct ModelFrame {

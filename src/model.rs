@@ -4,10 +4,11 @@
 //! is to serve as a reference point for sensor evaluations.
 
 use crate::{
-    Motion, XYZ,
+    XYZ,
     builder::SyntheticSensor,
     env::{Conditions, LAPSE_RT, MAX_SUBNATICA, Surface},
     math::{Quaternion, Vector, sq},
+    profile::Motion,
     sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer},
 };
 use libm::powf;

@@ -34,9 +34,6 @@ pub type Bias<const N: usize> = [f32; N];
 /// An N by N matrix for each axis' alignment.
 pub type Alignment<const N: usize> = [Bias<N>; N];
 
-/// A theoretical kinematic target (acceleration, angular velocity).
-pub type Motion = (XYZ, XYZ);
-
 /// DRY getter.
 macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 	#[doc = concat!("
@@ -104,10 +101,10 @@ impl<const N: usize> Simulation<N> {
     /// Assume a builder `b` previously created.
     ///
     /// ```
-    /// let sim = Simulation::new(b, 1000);
+    /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
     /// sim
-    ///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
-    ///     .fix(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
+    ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])
+    ///     .fix(150, [0.3, 0.2, 26.1], [0.3, 0.3, 1.0]);
     /// ```
     ///
     /// The first call to [`fix`] will create a new data point with the
@@ -116,8 +113,8 @@ impl<const N: usize> Simulation<N> {
     ///
     /// The second call to [`fix`] will create a new data point with the
     /// timestamp 1350 ms, using new data directly as new target.
-    pub fn fix(&mut self, f: Motion, dur: u32) -> &mut Self {
-        self.p.append(f, dur, false);
+    pub fn fix(&mut self, dur: u32, a: XYZ, g: XYZ) -> &mut Self {
+        self.p.append((a, g), dur, false);
         self
     }
 
@@ -131,18 +128,18 @@ impl<const N: usize> Simulation<N> {
     /// Assume a builder `b` previously created.
     ///
     /// ```
-    /// let sim = Simulation::new(b, 1000);
+    /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
     /// sim
-    ///     .fix(([0.2, 0.3, 12.2], [0.1, 0.4, 2.3]), 200)
-    ///     .add(([0.3, 0.2, 26.1], [0.3, 0.3, 1.0]), 150);
+    ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])
+    ///     .add(150, [0.3, 0.2, 26.1], [0.3, 0.3, 1.0]);
     /// ```
     ///
     /// The call to [`add`] will create a new data point with the timestamp
     /// 1350 ms from the creation of `sim`, and the provided kinematic data
     /// will be added to that of a previous data point. The new target, in
     /// this case, will hold `[0.5, 0.5, 38.3]` and `[0.4, 0.7, 3.3]`.
-    pub fn add(&mut self, f: Motion, dur: u32) -> &mut Self {
-        self.p.append(f, dur, true);
+    pub fn add(&mut self, dur: u32, a: XYZ, g: XYZ) -> &mut Self {
+        self.p.append((a, g), dur, true);
         self
     }
 
