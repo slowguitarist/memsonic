@@ -62,8 +62,9 @@ impl BiquadCoef {
 
         let alpha = 0.5 * sin_w
             / match conf {
-                BiquadType::LowPass(.., q) | BiquadType::HighPass(.., q) => q,
-                BiquadType::Notch(c, q) => c / q,
+                BiquadType::LowPass(.., q)
+                | BiquadType::HighPass(.., q)
+                | BiquadType::Notch(.., q) => q,
             };
 
         let (b0, b1, b2, a0, a1, a2) = match conf {
@@ -124,40 +125,126 @@ impl Filter<f32, f32> for Biquad {
 
 pub(crate) struct CICConf {
     decim_fac: u32,
-    sens: f32,
+    _sens: f32,
 }
 
 impl CICConf {
     pub(crate) fn new(decim_fac: u32, sens: f32) -> Self {
-        Self { decim_fac, sens }
+        Self {
+            decim_fac,
+            _sens: sens,
+        }
     }
 }
 
 #[derive(Clone, Copy, Default)]
 pub(crate) struct EmuCIC {
-    integrator: i32,
-    comb: i32,
+    acc: f32,
     ctr: u32,
 }
 
 impl Filter<f32, Option<f32>> for EmuCIC {
     type SensorParams = CICConf;
 
+    /// Temporary replacement of CIC with a block accumulator.
     fn filter(&mut self, conf: &CICConf, sample: f32) -> Option<f32> {
-        let raw = (sample * conf.sens) as i32;
-
-        self.integrator = self.integrator.wrapping_add(raw);
+        self.acc += sample;
         self.ctr += 1;
 
         if self.ctr >= conf.decim_fac {
             self.ctr = 0;
-
-            let out = self.integrator.wrapping_sub(self.comb);
-            self.comb = self.integrator;
-
-            return Some((out / conf.decim_fac as i32) as f32 / conf.sens);
+            let mean = self.acc / conf.decim_fac as f32;
+            self.acc = 0.0;
+            return Some(mean);
         }
 
         None
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Tests
+/////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cic_precision_loss() {
+        let conf = CICConf::new(10, 1000.0);
+        let mut cic = EmuCIC::new();
+
+        let mut result = None;
+        for _ in 0..10 {
+            result = cic.filter(&conf, 0.0015);
+        }
+
+        let out = result.expect("Wrong counter?");
+
+        assert!(
+            (out - 0.0015).abs() < f32::EPSILON,
+            "CIC precision loss: expected 0.0015, but got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn test_notch_q_factor_scaling() {
+        let odr = 1000.0;
+        let q = 0.707;
+        let fc = 50.0;
+
+        let notch = BiquadCoef::derive(BiquadType::Notch(fc, q), odr);
+
+        let w_0 = 2.0 * PI * fc / odr;
+        let expected_alpha = 0.5 * sinf(w_0) / q;
+
+        let expected_a1 = (-2.0 * cosf(w_0)) / (1.0 + expected_alpha);
+
+        assert!(
+            (notch.a1 - expected_a1).abs() < 1e-4,
+            "Expected a1: {}, Got a1: {}",
+            expected_a1,
+            notch.a1
+        );
+    }
+
+    #[test]
+    fn test_biquad_lowpass_dc_gain() {
+        let conf = BiquadCoef::derive(BiquadType::LowPass(10.0, 0.707), 100.0);
+        let mut biquad = Biquad::new();
+
+        let mut out = 0.0;
+
+        // Constant DC value of 1.0 to let it settle
+        for _ in 0..100 {
+            out = biquad.filter(&conf, 1.0);
+        }
+
+        assert!(
+            (out - 1.0).abs() < 1e-6,
+            "Bad DC gain. Expected ~1.0, got: {}",
+            out
+        );
+    }
+
+    #[test]
+    fn test_biquad_highpass_dc_rejection() {
+        let conf = BiquadCoef::derive(BiquadType::HighPass(10.0, 0.707), 100.0);
+        let mut biquad = Biquad::new();
+
+        let mut out = 0.0;
+
+        // Constant DC value of 1.0
+        for _ in 0..100 {
+            out = biquad.filter(&conf, 1.0);
+        }
+
+        assert!(
+            out.abs() < 1e-6,
+            "Bad DC rejection. Expected ~0.0, got: {}",
+            out
+        );
     }
 }

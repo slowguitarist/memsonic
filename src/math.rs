@@ -8,7 +8,7 @@ use crate::{
     env::{TOLER, rand},
 };
 use core::{array::from_fn, f32::consts::PI};
-use libm::{cosf, powf, tanhf};
+use libm::{cosf, powf, sinf, tanhf};
 
 /////////////////////////////////////////////////////////////////////////////
 // Functions on f32
@@ -26,18 +26,13 @@ pub(crate) const fn sq(x: f32) -> f32 {
 }
 
 #[inline(always)]
-pub(crate) const fn fabs(x: f32) -> f32 {
-    f32::from_bits(x.to_bits() & !(1 << 31))
-}
-
-#[inline(always)]
 pub(crate) const fn ceil(x: f32) -> f32 {
     (x + 1.0) as i32 as f32
 }
 
 #[inline(always)]
 pub(crate) const fn basically1(x: f32) -> bool {
-    fabs(x - 1.0) < TOLER
+    (x - 1.0).abs() < TOLER
 }
 
 #[inline(always)]
@@ -216,7 +211,7 @@ impl Blend for TrigIncr {
     }
 
     fn blend(&self, x: f32) -> f32 {
-        0.5 * (1.0 - cosf(PI * powf(x, fabs(self.k))))
+        0.5 * (1.0 - cosf(PI * powf(x, self.k.abs())))
     }
 }
 
@@ -234,7 +229,7 @@ impl Blend for TrigDecr {
     }
 
     fn blend(&self, x: f32) -> f32 {
-        0.5 * (1.0 + cosf(PI * powf(x, fabs(self.k))))
+        0.5 * (1.0 + cosf(PI * powf(x, self.k.abs())))
     }
 }
 
@@ -331,8 +326,8 @@ impl Quaternion {
         }
 
         let theta = 0.5 * norm_w * dt;
-        let cos_t = libm::cosf(theta);
-        let sin_t = libm::sinf(theta) / norm_w;
+        let cos_t = cosf(theta);
+        let sin_t = sinf(theta) / norm_w;
 
         let dq_w = cos_t;
         let dq_x = w[0] * sin_t;
@@ -373,30 +368,24 @@ mod tests {
     const TOL: f32 = 1e-5;
 
     #[test]
-    fn test_fabs() {
-        let x = -6.29847928;
-        assert_eq!(fabs(x), -x);
-    }
-
-    #[test]
     fn test_quaternion_rotations() {
         // Rotate by 90 degrees around the Z axis.
         let half_angle = PI / 4.0;
-        let q = Quaternion(libm::cosf(half_angle), 0.0, 0.0, libm::sinf(half_angle));
+        let q = Quaternion(cosf(half_angle), 0.0, 0.0, sinf(half_angle));
 
         let v_world = [1.0, 0.0, 0.0];
 
         // Should yield [0.0, 1.0, 0.0]
         let v_body = q.rotate_b2w(v_world);
-        assert!(fabs(v_body[0]) < TOL);
-        assert!(fabs(v_body[1] - 1.0) < TOL);
-        assert!(fabs(v_body[2]) < TOL);
+        assert!(v_body[0].abs() < TOL);
+        assert!((v_body[1] - 1.0).abs() < TOL);
+        assert!(v_body[2].abs() < TOL);
 
         // Should yield [1.0, 0.0, 0.0]
         let v_reverted = q.rotate_w2b(v_body);
-        assert!(fabs(v_reverted[0] - 1.0) < TOL);
-        assert!(fabs(v_reverted[1]) < TOL);
-        assert!(fabs(v_reverted[2]) < TOL);
+        assert!((v_reverted[0] - 1.0).abs() < TOL);
+        assert!(v_reverted[1].abs() < TOL);
+        assert!(v_reverted[2].abs() < TOL);
     }
 
     #[test]
@@ -411,13 +400,13 @@ mod tests {
             q.integrate(w, dt);
         }
 
-        let expected_w = libm::cosf(PI / 4.0);
-        let expected_x = libm::sinf(PI / 4.0);
+        let expected_w = cosf(PI / 4.0);
+        let expected_x = sinf(PI / 4.0);
 
-        assert!(fabs(q.0 - expected_w) < TOL);
-        assert!(fabs(q.1 - expected_x) < TOL);
-        assert!(fabs(q.2) < TOL);
-        assert!(fabs(q.3) < TOL);
+        assert!((q.0 - expected_w).abs() < TOL);
+        assert!((q.1 - expected_x).abs() < TOL);
+        assert!(q.2.abs() < TOL);
+        assert!(q.3.abs() < TOL);
     }
 
     #[test]
@@ -429,7 +418,7 @@ mod tests {
         let val_above = b.blend(threshold + 1e-9);
 
         assert!(
-            fabs(val_below - val_above) < TOL,
+            (val_below - val_above).abs() < TOL,
             "Barron blend discontinuity at threshold. Below: {}, Above: {}",
             val_below,
             val_above
@@ -444,7 +433,7 @@ mod tests {
         let end = b.blend(1.0);
 
         // Test bounds
-        assert!(fabs(start) < TOL);
-        assert!(fabs(end - 1.0) < TOL);
+        assert!(start.abs() < TOL);
+        assert!((end - 1.0).abs() < TOL);
     }
 }
