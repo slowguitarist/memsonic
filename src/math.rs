@@ -27,7 +27,7 @@ pub(crate) const fn sq(x: f32) -> f32 {
 
 #[inline(always)]
 pub(crate) const fn fabs(x: f32) -> f32 {
-    (x.to_bits() & !(1 << 31)) as f32
+    f32::from_bits(x.to_bits() & !(1 << 31))
 }
 
 #[inline(always)]
@@ -134,7 +134,7 @@ impl Vector for XYZ {
     fn norm(&self) -> f32 {
         let sq = sq(self[0]) + sq(self[1]) + sq(self[2]);
         if basically1(sq) {
-            return sq;
+            return 1.0;
         }
         sqrt(sq)
     }
@@ -195,9 +195,9 @@ impl Blend for Barron {
         let c = self.s * (self.t - x);
 
         if x < self.t {
-            self.t * x / (x + c + 1e-5)
+            self.t * x / (x + c + 1e-9)
         } else {
-            (1.0 - self.t) * (x - 1.0) / (1.0 - x - c + 1e-5)
+            1.0 + (1.0 - self.t) * (x - 1.0) / (1.0 - x - c + 1e-9)
         }
     }
 }
@@ -269,6 +269,7 @@ impl Blend for Hyperbolic {
 /////////////////////////////////////////////////////////////////////////////
 
 /// Interpreted as WXYZ.
+#[derive(Debug)]
 pub(crate) struct Quaternion(f32, f32, f32, f32);
 
 impl Quaternion {
@@ -298,7 +299,8 @@ impl Quaternion {
         ]
     }
 
-    pub(crate) fn integrate(&mut self, w: XYZ, dt: f32) -> &Self {
+    /// Only accurate for very small dt (< 0.0005s).
+    fn linear_approx(&mut self, w: XYZ, dt: f32) {
         let dq_w = -0.5 * (self.1 * w[0] + self.2 * w[1] + self.3 * w[2]) * dt;
         let dq_x = 0.5 * (self.0 * w[0] + self.2 * w[2] - self.3 * w[1]) * dt;
         let dq_y = 0.5 * (self.0 * w[1] - self.1 * w[2] + self.3 * w[0]) * dt;
@@ -319,7 +321,130 @@ impl Quaternion {
             self.2 *= inv;
             self.3 *= inv;
         }
+    }
 
+    /// Somewhat inaccruate for very small dt (< 0.0005s).
+    fn exponent_approx(&mut self, w: XYZ, dt: f32) {
+        let norm_w = sqrt(sq(w[0]) + sq(w[1]) + sq(w[2]));
+        if norm_w < 1e-8 {
+            return;
+        }
+
+        let theta = 0.5 * norm_w * dt;
+        let cos_t = libm::cosf(theta);
+        let sin_t = libm::sinf(theta) / norm_w;
+
+        let dq_w = cos_t;
+        let dq_x = w[0] * sin_t;
+        let dq_y = w[1] * sin_t;
+        let dq_z = w[2] * sin_t;
+
+        // self = self * dq
+        let w0 = self.0 * dq_w - self.1 * dq_x - self.2 * dq_y - self.3 * dq_z;
+        let x0 = self.0 * dq_x + self.1 * dq_w + self.2 * dq_z - self.3 * dq_y;
+        let y0 = self.0 * dq_y - self.1 * dq_z + self.2 * dq_w + self.3 * dq_x;
+        let z0 = self.0 * dq_z + self.1 * dq_y - self.2 * dq_x + self.3 * dq_w;
+
+        self.0 = w0;
+        self.1 = x0;
+        self.2 = y0;
+        self.3 = z0;
+    }
+
+    pub(crate) fn integrate(&mut self, w: XYZ, dt: f32) -> &Self {
+        if dt < 0.0005 {
+            self.linear_approx(w, dt);
+        } else {
+            self.exponent_approx(w, dt);
+        }
         self
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Tests
+/////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::f32::consts::PI;
+
+    const TOL: f32 = 1e-5;
+
+    #[test]
+    fn test_fabs() {
+        let x = -6.29847928;
+        assert_eq!(fabs(x), -x);
+    }
+
+    #[test]
+    fn test_quaternion_rotations() {
+        // Rotate by 90 degrees around the Z axis.
+        let half_angle = PI / 4.0;
+        let q = Quaternion(libm::cosf(half_angle), 0.0, 0.0, libm::sinf(half_angle));
+
+        let v_world = [1.0, 0.0, 0.0];
+
+        // Should yield [0.0, 1.0, 0.0]
+        let v_body = q.rotate_b2w(v_world);
+        assert!(fabs(v_body[0]) < TOL);
+        assert!(fabs(v_body[1] - 1.0) < TOL);
+        assert!(fabs(v_body[2]) < TOL);
+
+        // Should yield [1.0, 0.0, 0.0]
+        let v_reverted = q.rotate_w2b(v_body);
+        assert!(fabs(v_reverted[0] - 1.0) < TOL);
+        assert!(fabs(v_reverted[1]) < TOL);
+        assert!(fabs(v_reverted[2]) < TOL);
+    }
+
+    #[test]
+    fn test_exponent_approx() {
+        let mut q = Quaternion::new();
+        let w = [PI, 0.0, 0.0];
+        let total_dt = 0.5;
+        let steps = 100;
+        let dt = total_dt / steps as f32;
+
+        for _ in 0..steps {
+            q.integrate(w, dt);
+        }
+
+        let expected_w = libm::cosf(PI / 4.0);
+        let expected_x = libm::sinf(PI / 4.0);
+
+        assert!(fabs(q.0 - expected_w) < TOL);
+        assert!(fabs(q.1 - expected_x) < TOL);
+        assert!(fabs(q.2) < TOL);
+        assert!(fabs(q.3) < TOL);
+    }
+
+    #[test]
+    fn test_barron_blend_continuity() {
+        let threshold = 0.7;
+        let b = Barron::new((5.0, threshold));
+
+        let val_below = b.blend(threshold - 1e-9);
+        let val_above = b.blend(threshold + 1e-9);
+
+        assert!(
+            fabs(val_below - val_above) < TOL,
+            "Barron blend discontinuity at threshold. Below: {}, Above: {}",
+            val_below,
+            val_above
+        );
+    }
+
+    #[test]
+    fn test_hyperbolic_blend_bounds() {
+        let b = Hyperbolic::new(2.0);
+
+        let start = b.blend(0.0);
+        let end = b.blend(1.0);
+
+        // Test bounds
+        assert!(fabs(start) < TOL);
+        assert!(fabs(end - 1.0) < TOL);
     }
 }
