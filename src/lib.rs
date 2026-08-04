@@ -68,7 +68,6 @@ pub struct Simulation<const N: usize> {
     m: Model,
     p: CannedProfile<N>,
     tim: u32,
-    delay: u32,
     rate: u32,
 }
 
@@ -86,7 +85,6 @@ impl<const N: usize> Simulation<N> {
             m: Model::new(rate, b.imu(), b.baro(), S::setup()),
             p: CannedProfile::new(delay),
             tim: 0,
-            delay,
             rate,
         }
     }
@@ -145,22 +143,18 @@ impl<const N: usize> Simulation<N> {
 
     /// Breaks elapsed time into equal intervals equal to engine rate
     /// and calls derivation logic multiple times. Lazy.
-    fn step(&mut self, mut tim: u32) -> &mut Self {
-        if tim > self.delay {
-            tim -= self.delay;
-        }
+    fn step(&mut self, tim: u32) -> &mut Self {
+        let secs = self.rate as f32 / 1000.0;
 
-        if tim.wrapping_sub(self.tim) < self.rate {
+        if self.tim > tim || tim.wrapping_sub(self.tim) < self.rate {
             return self;
         }
 
-        if let Some(target) = self.p.linearize(tim) {
-            let secs = self.rate as f32 / 1000.0;
-
-            while tim.wrapping_sub(self.tim) >= self.rate {
-                self.tim = self.tim.wrapping_add(self.rate);
-                self.m.derive(secs, target);
-            }
+        while tim.wrapping_sub(self.tim) >= self.rate
+            && let Some(target) = self.p.linearize(self.tim)
+        {
+            self.tim = self.tim.wrapping_add(self.rate);
+            self.m.derive(secs, target);
         }
 
         self
