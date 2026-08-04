@@ -6,7 +6,7 @@
 use crate::{
     XYZ,
     builder::SyntheticSensor,
-    env::{Conditions, LAPSE_RT, MAX_SUBNATICA, Surface},
+    env::{Conditions, LAPSE_RT, MAX_SUBNATICA},
     math::{Quaternion, Vector, sq},
     profile::Motion,
     sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer},
@@ -26,27 +26,27 @@ pub(crate) struct ModelState {
 }
 
 impl ModelState {
-    fn new(mag: XYZ, sea_tmp: f32, sea_prs: f32) -> Self {
+    fn new(env: Conditions) -> Self {
         Self {
             acc: XYZ::default(),
             ang: XYZ::default(),
             vel: XYZ::default(),
             pos: XYZ::default(),
-            prs: sea_prs,
-            tmp: sea_tmp,
+            prs: env.sea_prs,
+            tmp: env.sea_tmp,
             vib: 0.0,
             q: Quaternion::new(),
-            env: Conditions::new(mag, sea_prs, sea_tmp),
+            env,
         }
     }
 }
 
 pub(crate) struct Model {
-    pub(crate) s: ModelState,
     pub(crate) acl: Accelerometer,
     pub(crate) gyr: Gyroscope,
     pub(crate) mag: Magnetometer,
     pub(crate) bar: Barometer,
+    pub(crate) s: ModelState,
 }
 
 impl Model {
@@ -54,14 +54,14 @@ impl Model {
         rate: u32,
         imu: [SyntheticSensor<3>; 3],
         bar: SyntheticSensor<1>,
-        site: Surface,
+        site: Conditions,
     ) -> Self {
         Self {
-            s: ModelState::new(site.mag, site.tmp, site.prs),
             acl: Accelerometer::new(rate, imu[0].s.unwrap_or(0.0005), imu[0].k, imu[0].m),
             gyr: Gyroscope::new(rate, imu[1].s.unwrap_or(0.00001), imu[1].k, imu[1].m),
             mag: Magnetometer::new(rate, imu[2].k, imu[2].m),
-            bar: Barometer::new(rate, bar.k, bar.m, site.tmp),
+            bar: Barometer::new(rate, bar.k, bar.m, site.sea_tmp),
+            s: ModelState::new(site),
         }
     }
 

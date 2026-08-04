@@ -65,8 +65,8 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 /////////////////////////////////////////////////////////////////////////////
 
 pub struct Simulation<const N: usize> {
-    m: Model,
     p: CannedProfile<N>,
+    m: Model,
     tim: u32,
     rate: u32,
 }
@@ -81,9 +81,10 @@ impl<const N: usize> Simulation<N> {
     /// sensor drift while a vehicle is stationary.
     pub fn new<S: Setup>(mut b: impl SimBuilder, delay: u32) -> Self {
         let rate = b.rate();
+        let cond = S::setup().into_cond();
         Self {
-            m: Model::new(rate, b.imu(), b.baro(), S::setup()),
-            p: CannedProfile::new(delay),
+            p: CannedProfile::new(delay, cond.g_si_ned),
+            m: Model::new(rate, b.imu(), b.baro(), cond),
             tim: 0,
             rate,
         }

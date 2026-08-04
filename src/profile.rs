@@ -10,11 +10,21 @@ use crate::{XYZ, math::Vector};
 /// A theoretical kinematic target (acceleration, angular velocity).
 pub(crate) type Motion = (XYZ, XYZ);
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct ModelFrame {
     ts: u32,
     acc: XYZ,
     ang: XYZ,
+}
+
+impl ModelFrame {
+    fn idle(g: f32) -> Self {
+        Self {
+            ts: 0,
+            acc: [0.0, 0.0, g],
+            ang: XYZ::default(),
+        }
+    }
 }
 
 pub(crate) struct CannedProfile<const N: usize> {
@@ -24,11 +34,11 @@ pub(crate) struct CannedProfile<const N: usize> {
 
 impl<const N: usize> CannedProfile<N> {
     // Starting point at [0] always has a 0 timestamp and no kinematics.
-    pub(crate) fn new(delay: u32) -> Self {
+    pub(crate) fn new(delay: u32, g: f32) -> Self {
         assert!(N > 0);
         let mut me = CannedProfile {
             count: 1,
-            f: [ModelFrame::default(); N],
+            f: [ModelFrame::idle(g); N],
         };
         me.f[0].ts = delay;
         me

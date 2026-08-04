@@ -88,6 +88,12 @@ pub struct Surface {
     pub prs: f32,
 }
 
+impl Surface {
+    pub(crate) fn into_cond(self) -> Conditions {
+        Conditions::new(self.mag, self.prs, self.tmp)
+    }
+}
+
 /// Structs implementing this trait must return the [`Surface`] type filled with
 /// magnetic field, sea level temperature and pressure specific to their location.
 pub trait Setup {
