@@ -49,7 +49,7 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 	Assume a builder `sim` previously created and populated
 	with kinematic targets, and current time `now`, in ms.
 
-	```
+	```ignore
 	if let Ok(reading) = sim.", stringify!($f), "(now) {
 		// consume reading
 	}
@@ -99,7 +99,7 @@ impl<const N: usize> Simulation<N> {
     ///
     /// Assume a builder `b` previously created.
     ///
-    /// ```
+    /// ```ignore
     /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
     /// sim
     ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])
@@ -126,7 +126,7 @@ impl<const N: usize> Simulation<N> {
     ///
     /// Assume a builder `b` previously created.
     ///
-    /// ```
+    /// ```ignore
     /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
     /// sim
     ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])

@@ -35,7 +35,7 @@ impl ModelState {
             prs: env.sea_prs,
             tmp: env.sea_tmp,
             vib: 0.0,
-            q: Quaternion::new(),
+            q: Quaternion::up(),
             env,
         }
     }
@@ -84,7 +84,7 @@ impl Model {
             -self.s.pos[2]
         };
 
-        self.s.tmp = self.s.env.sea_tmp - LAPSE_RT * alt;
+        self.s.tmp = (self.s.env.sea_tmp - LAPSE_RT * alt).max(216.65);
         self.s.prs = self.s.env.sea_prs * powf(self.s.tmp / self.s.env.sea_tmp, self.s.env.r_exp);
 
         let v_sq = sq(self.s.vel[0]) + sq(self.s.vel[1]) + sq(self.s.vel[2]);

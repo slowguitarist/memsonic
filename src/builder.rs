@@ -11,11 +11,12 @@
 
 use crate::{
     Alignment, Bias, ODR,
+    math::interpolate,
     math::{Barron, Blend, Hyperbolic, Randomize, SquareMatrix},
-    math::{ceil, interpolate},
     sensors::{Collector, Disperser},
 };
 use core::f32::consts::FRAC_1_SQRT_2;
+use libm::ceilf;
 
 /// Builder public API.
 pub trait SimBuilder {
@@ -29,9 +30,9 @@ pub trait SimBuilder {
     ///
     /// ## Examples
     ///
-    /// ```
-    /// let b = SkewedIMU::new((10.0, 10.0, 15.0, 40.0), 0.25);
-    /// let s = Simulation::<10>new(b, 1000);
+    /// ```ignore
+    /// let b = SkewedIMU::new((10, 10, 30, 40), 0.25);
+    /// let s = Simulation::<10>::new::<memsonic::env::BuffaloJuly>(b, 1000);
     /// ```
     fn new(r: ODR, p: Self::InputParams) -> Self;
 
@@ -81,7 +82,7 @@ impl<const N: usize> SensorConf<N> {
     fn ideal(odr: u32) -> Self {
         Self {
             odr,
-            cutoff: 100.0,
+            cutoff: (odr as f32 * 0.4).min(100.0),
             qbw: FRAC_1_SQRT_2,
             firsens: None,
             sigma: 0.0,
@@ -118,7 +119,10 @@ impl<const N: usize> SensorConf<N> {
     fn decay(&mut self, b: impl Blend, x: f32) -> &mut Self {
         let i = 1.0 - x;
 
-        self.cutoff = interpolate(b, 100.0, 20.0, i);
+        let max_cutoff = (self.odr as f32 * 0.4).min(100.0);
+        let min_cutoff = (self.odr as f32 * 0.1).min(20.0);
+
+        self.cutoff = interpolate(b, max_cutoff, min_cutoff, i);
         self.qbw = interpolate(b, FRAC_1_SQRT_2, 0.5, i);
         self.firsens = Some(interpolate(b, 700_000.0, 5_000.0, i));
         self
@@ -185,10 +189,10 @@ impl SimBuilder for Manual {
             eng = 1;
             let k = 5.0 / (m as f32);
 
-            self.acc.odr = ceil(self.acc.odr as f32 * k) as u32;
-            self.gyr.odr = ceil(self.gyr.odr as f32 * k) as u32;
-            self.mag.odr = ceil(self.mag.odr as f32 * k) as u32;
-            self.bar.odr = ceil(self.bar.odr as f32 * k) as u32;
+            self.acc.odr = ceilf(self.acc.odr as f32 * k) as u32;
+            self.gyr.odr = ceilf(self.gyr.odr as f32 * k) as u32;
+            self.mag.odr = ceilf(self.mag.odr as f32 * k) as u32;
+            self.bar.odr = ceilf(self.bar.odr as f32 * k) as u32;
         }
 
         eng

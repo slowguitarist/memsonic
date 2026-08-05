@@ -266,8 +266,8 @@ impl Evaluate for Barometer {
             0.0
         };
 
-        self.tmp += (s.tmp - self.tmp) * self.lag;
-        let drift = (self.tmp - 20.0) * DRIFT_PER_C;
+        self.tmp += (s.tmp - self.tmp) * self.lag.clamp(0.0, 1.0);
+        let drift = (self.tmp - 273.15 - 20.0) * DRIFT_PER_C;
 
         let prs = [s.prs
             + shock

@@ -17,17 +17,13 @@ use libm::{cosf, powf, sinf, tanhf};
 #[inline(always)]
 pub(crate) fn leash(pt: f32, d: f32) -> f32 {
     let r = rand();
-    pt + d * f32::from_bits((r >> 9) | 0x3f000000 | (r << 31))
+    let rand_f = (r as f32 / u32::MAX as f32) * 2.0 - 1.0;
+    pt + d * rand_f
 }
 
 #[inline(always)]
 pub(crate) const fn sq(x: f32) -> f32 {
     x * x
-}
-
-#[inline(always)]
-pub(crate) const fn ceil(x: f32) -> f32 {
-    (x + 1.0) as i32 as f32
 }
 
 #[inline(always)]
@@ -268,8 +264,13 @@ impl Blend for Hyperbolic {
 pub(crate) struct Quaternion(f32, f32, f32, f32);
 
 impl Quaternion {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
         Self(1.0, 0.0, 0.0, 0.0)
+    }
+
+    pub(crate) fn up() -> Self {
+        Self(0.0, 1.0, 0.0, 0.0)
     }
 
     pub(crate) const fn rotate_w2b(&self, v: XYZ) -> XYZ {

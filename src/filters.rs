@@ -48,14 +48,13 @@ pub(crate) struct BiquadCoef {
 
 impl BiquadCoef {
     pub(crate) fn derive(conf: BiquadType, odr: f32) -> Self {
-        let omega = 2.0
-            * PI
-            * match conf {
-                BiquadType::LowPass(cutoff, ..)
-                | BiquadType::HighPass(cutoff, ..)
-                | BiquadType::Notch(cutoff, ..) => cutoff,
-            }
-            / odr;
+        let raw_cutoff = match conf {
+            BiquadType::LowPass(cutoff, ..)
+            | BiquadType::HighPass(cutoff, ..)
+            | BiquadType::Notch(cutoff, ..) => cutoff,
+        };
+        let cutoff = raw_cutoff.min(odr * 0.49);
+        let omega = 2.0 * PI * cutoff / odr;
 
         let cos_w = cosf(omega);
         let sin_w = sinf(omega);
