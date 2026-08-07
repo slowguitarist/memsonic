@@ -11,6 +11,7 @@ use crate::{
     profile::Motion,
     sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer},
 };
+use core::f32::consts::PI;
 use libm::powf;
 
 pub(crate) struct ModelState {
@@ -69,7 +70,13 @@ impl Model {
         self.s.acc = f.0;
         self.s.ang = f.1;
 
-        let mut kin = self.s.q.integrate(self.s.ang, dt).rotate_b2w(self.s.acc);
+        let ang_rad = [
+            self.s.ang[0] * (PI / 180.0),
+            self.s.ang[1] * (PI / 180.0),
+            self.s.ang[2] * (PI / 180.0),
+        ];
+
+        let mut kin = self.s.q.integrate(ang_rad, dt).rotate_b2w(self.s.acc);
 
         kin[2] += self.s.env.g_si_ned;
 
