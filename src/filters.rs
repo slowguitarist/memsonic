@@ -1,6 +1,6 @@
 //! # filters
 //!
-//! Generic digital filters used by sensors. Emulated Windowed Sinc FIR is used
+//! Generic digital filters used by sensors. Windowed sinc FIR is used
 //! for oversampling and a biquad variant -- as a general ODR-bound IIR.
 
 use crate::env::{FIR_MAX_TAPS, NORMAL_POSITIVE};
@@ -104,16 +104,33 @@ impl BiquadCoef {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub(crate) struct Biquad {
     s1: f32,
     s2: f32,
+    init: bool,
+}
+
+impl Default for Biquad {
+    fn default() -> Self {
+        Self {
+            s1: 0.0,
+            s2: 0.0,
+            init: false,
+        }
+    }
 }
 
 impl Filter<f32, f32> for Biquad {
     type SensorParams = BiquadCoef;
 
     fn filter(&mut self, conf: &BiquadCoef, sample: f32) -> f32 {
+        if !self.init {
+            self.init = true;
+            self.s1 = (1.0 - conf.b0) * sample;
+            self.s2 = (conf.b2 - conf.a2) * sample;
+        }
+
         let out = self.s1 + conf.b0 * sample;
 
         self.s1 = conf.b1 * sample - conf.a1 * out + self.s2;
@@ -128,8 +145,8 @@ pub(crate) struct FIRDecim(u32);
 impl FIRDecim {
     pub(crate) fn new(decim_factor: u32) -> Self {
         assert!(
-            decim_factor > 7,
-            "Windowed sinc FIR is suboptimal for D < 8, please adjust your ODR."
+            decim_factor > 4,
+            "Windowed sinc FIR is suboptimal for OSR < 5, please adjust your ODR."
         );
         Self(decim_factor)
     }
@@ -178,22 +195,21 @@ impl Filter<f32, Option<f32>> for WindowedSinc {
         } else {
             let mid = (m - 1) as f32 / 2.0;
             let start = self.len - m;
+            let q = PI / mid;
 
             let mut values = 0.0;
             let mut weights = 0.0;
 
             for k in 0..m {
                 let x = k as f32 - mid;
+                let d = q * x;
 
                 // Approximate Hamming window
-                let win = 0.54 + 0.46 * cosf(PI * x / mid);
-                let sinc = if x.abs() < 1e-6 {
-                    1.0
-                } else {
-                    sinf(PI * x / mid) / (PI * x / mid)
-                };
+                let wind = 0.54 + 0.46 * cosf(d);
+                let sinc = if x.abs() < 1e-6 { 1.0 } else { sinf(d) / d };
 
-                let w = (win * sinc).max(0.0);
+                let w = (wind * sinc).max(0.0);
+
                 values += w * self.buf[start + k];
                 weights += w;
             }
