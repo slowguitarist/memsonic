@@ -58,9 +58,9 @@ fn simple_flight() {
         //     println!("MAG {} {:?}", ts, a);
         // }
 
-        if let Ok(a) = simu.pressure(ts) {
-            println!("BAR {} {:?}", ts, a);
-        }
+        // if let Ok(a) = simu.pressure(ts) {
+        //     println!("BAR {} {:?}", ts, a);
+        // }
 
         ts += step;
     }

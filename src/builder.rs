@@ -119,6 +119,7 @@ impl<const N: usize> SensorConf<N> {
 
         self.cutoff = interpolate(b, max_cutoff, min_cutoff, i);
         self.qbw = interpolate(b, FRAC_1_SQRT_2, 0.5, i);
+
         self
     }
 
