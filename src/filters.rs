@@ -1,8 +1,9 @@
 //! # filters
 //!
-//! Generic digital filters used by sensors. Emulated decimator CIC is used
+//! Generic digital filters used by sensors. Emulated Windowed Sinc FIR is used
 //! for oversampling and a biquad variant -- as a general ODR-bound IIR.
 
+use crate::env::{FIR_MAX_TAPS, NORMAL_POSITIVE};
 use core::f32::consts::PI;
 use libm::{cosf, sinf};
 
@@ -122,42 +123,90 @@ impl Filter<f32, f32> for Biquad {
     }
 }
 
-pub(crate) struct CICConf {
-    decim_fac: u32,
-    _sens: f32,
+pub(crate) struct FIRDecim(u32);
+
+impl FIRDecim {
+    pub(crate) fn new(decim_factor: u32) -> Self {
+        assert!(
+            decim_factor > 7,
+            "Windowed sinc FIR is suboptimal for D < 8, please adjust your ODR."
+        );
+        Self(decim_factor)
+    }
 }
 
-impl CICConf {
-    pub(crate) fn new(decim_fac: u32, sens: f32) -> Self {
+#[derive(Clone, Copy)]
+pub(crate) struct WindowedSinc {
+    buf: [f32; FIR_MAX_TAPS],
+    len: usize,
+    ctr: u32,
+}
+
+impl Default for WindowedSinc {
+    fn default() -> Self {
         Self {
-            decim_fac,
-            _sens: sens,
+            buf: [0.0; FIR_MAX_TAPS],
+            len: 0,
+            ctr: 0,
         }
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub(crate) struct EmuCIC {
-    acc: f32,
-    ctr: u32,
-}
+impl Filter<f32, Option<f32>> for WindowedSinc {
+    type SensorParams = FIRDecim;
 
-impl Filter<f32, Option<f32>> for EmuCIC {
-    type SensorParams = CICConf;
-
-    /// Temporary replacement of CIC with a block accumulator.
-    fn filter(&mut self, conf: &CICConf, sample: f32) -> Option<f32> {
-        self.acc += sample;
+    fn filter(&mut self, conf: &FIRDecim, sample: f32) -> Option<f32> {
         self.ctr += 1;
 
-        if self.ctr >= conf.decim_fac {
-            self.ctr = 0;
-            let mean = self.acc / conf.decim_fac as f32;
-            self.acc = 0.0;
-            return Some(mean);
+        if self.len < FIR_MAX_TAPS {
+            self.buf[self.len] = sample;
+            self.len += 1;
+        } else {
+            self.buf.copy_within(1..FIR_MAX_TAPS, 0);
+            self.buf[FIR_MAX_TAPS - 1] = sample;
         }
 
-        None
+        if self.ctr < conf.0 {
+            return None;
+        }
+
+        self.ctr = 0;
+        let m = self.len.min(conf.0 as usize);
+
+        let out = if m <= 1 {
+            self.buf[self.len - 1]
+        } else {
+            let mid = (m - 1) as f32 / 2.0;
+            let start = self.len - m;
+
+            let mut values = 0.0;
+            let mut weights = 0.0;
+
+            for k in 0..m {
+                let x = k as f32 - mid;
+
+                // Approximate Hamming window
+                let win = 0.54 + 0.46 * cosf(PI * x / mid);
+                let sinc = if x.abs() < 1e-6 {
+                    1.0
+                } else {
+                    sinf(PI * x / mid) / (PI * x / mid)
+                };
+
+                let w = (win * sinc).max(0.0);
+                values += w * self.buf[start + k];
+                weights += w;
+            }
+
+            if weights > NORMAL_POSITIVE {
+                values / weights
+            } else {
+                self.buf[self.len - 1]
+            }
+        };
+
+        self.len = 0;
+        Some(out)
     }
 }
 
@@ -170,20 +219,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_cic_precision_loss() {
-        let conf = CICConf::new(10, 1000.0);
-        let mut cic = EmuCIC::new();
+    fn test_fir_precision_loss() {
+        let conf = FIRDecim::new(10);
+        let mut fir = WindowedSinc::new();
 
         let mut result = None;
         for _ in 0..10 {
-            result = cic.filter(&conf, 0.0015);
+            result = fir.filter(&conf, 0.0015);
         }
 
         let out = result.expect("Wrong counter?");
 
         assert!(
             (out - 0.0015).abs() < f32::EPSILON,
-            "CIC precision loss: expected 0.0015, but got: {}",
+            "FIR precision loss: expected 0.0015, but got: {}",
             out
         );
     }

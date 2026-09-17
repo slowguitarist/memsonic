@@ -345,6 +345,17 @@ impl Quaternion {
         self.1 = x0;
         self.2 = y0;
         self.3 = z0;
+
+        let d_sq = sq(self.0) + sq(self.1) + sq(self.2) + sq(self.3);
+
+        if !basically1(d_sq)
+            && let Some(inv) = invsqrt(d_sq)
+        {
+            self.0 *= inv;
+            self.1 *= inv;
+            self.2 *= inv;
+            self.3 *= inv;
+        }
     }
 
     pub(crate) fn integrate(&mut self, w: XYZ, dt: f32) -> &Self {

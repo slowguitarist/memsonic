@@ -72,7 +72,12 @@ impl<const N: usize> CannedProfile<N> {
 
         let p0 = &self.f[i];
         let p1 = &self.f[i + 1];
-        let k = (tim - p0.ts) as f32 / (p1.ts - p0.ts) as f32;
+        let dt = p1.ts - p0.ts;
+        let k = if dt == 0 {
+            0.0
+        } else {
+            (tim - p0.ts) as f32 / dt as f32
+        };
 
         Some((p0.acc.lerp(p1.acc, k), p0.ang.lerp(p1.ang, k)))
     }

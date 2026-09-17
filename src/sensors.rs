@@ -11,7 +11,7 @@ use crate::{
     filters::{
         Biquad, BiquadCoef,
         BiquadType::{self, LowPass},
-        CICConf, EmuCIC, Filter,
+        FIRDecim, Filter, WindowedSinc,
     },
     math::{Vector, sq, sqrt},
     model::ModelState,
@@ -23,7 +23,6 @@ pub(crate) struct Collector {
     pub(crate) odr: u32,
     pub(crate) cutoff: f32,
     pub(crate) qbw: f32,
-    pub(crate) sens: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -85,20 +84,20 @@ pub(crate) trait Evaluate {
 }
 
 struct SensorCore<const N: usize> {
-    cic: CICConf,
+    cic: FIRDecim,
     biq: BiquadCoef,
-    fir: [EmuCIC; N],
+    fir: [WindowedSinc; N],
     iir: [Biquad; N],
     meas: [f32; N],
     rel: bool,
 }
 
 impl<const N: usize> SensorCore<N> {
-    pub(crate) fn new(odr: u32, engrate: u32, biqtype: BiquadType, sens: f32) -> Self {
+    pub(crate) fn new(odr: u32, engrate: u32, biqtype: BiquadType) -> Self {
         Self {
-            cic: CICConf::new(odr / engrate, sens),
+            cic: FIRDecim::new(odr / engrate),
             biq: BiquadCoef::derive(biqtype, odr as f32),
-            fir: [EmuCIC::new(); N],
+            fir: [WindowedSinc::new(); N],
             iir: [Biquad::new(); N],
             meas: [0.0; N],
             rel: false,
@@ -161,7 +160,7 @@ pub(crate) struct Accelerometer {
 impl Accelerometer {
     pub(crate) fn new(engrate: u32, vibsens: f32, k: Collector, m: Disperser<3>) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw), k.sens),
+            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
             vibsens,
         }
@@ -185,7 +184,7 @@ pub(crate) struct Gyroscope {
 impl Gyroscope {
     pub(crate) fn new(engrate: u32, gsens: f32, k: Collector, m: Disperser<3>) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw), k.sens),
+            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
             gsens,
         }
@@ -194,6 +193,7 @@ impl Gyroscope {
 
 impl Evaluate for Gyroscope {
     fn evaluate(&mut self, s: &ModelState) -> &Self {
+        self.m.ng.0 = s.vib * self.gsens;
         self.k.collect(
             self.m
                 .disperse(&s.ang)
@@ -212,7 +212,7 @@ pub(crate) struct Magnetometer {
 impl Magnetometer {
     pub(crate) fn new(engrate: u32, k: Collector, m: Disperser<3>) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw), k.sens),
+            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
         }
     }
@@ -242,12 +242,7 @@ impl Barometer {
         sea_tmp: f32,
     ) -> Self {
         Self {
-            k: SensorCore::new(
-                filters.odr,
-                sim_rate,
-                LowPass(filters.cutoff, filters.qbw),
-                filters.sens,
-            ),
+            k: SensorCore::new(filters.odr, sim_rate, LowPass(filters.cutoff, filters.qbw)),
             ng: Gaussian(noise.sigma),
             bias: noise.bias[0],
             lag: noise.align[0][0],

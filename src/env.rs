@@ -21,22 +21,23 @@ pub(crate) const SHOCK_DEPTH: f32 = -2000.0;
 pub(crate) const DRIFT_PER_C: f32 = 0.5;
 pub(crate) const MAX_SUBNATICA: f32 = 2000.0;
 pub(crate) const TOLER: f32 = 1e-3;
+pub(crate) const FIR_MAX_TAPS: usize = 64;
+pub(crate) const NORMAL_POSITIVE: f32 = 1e-9;
 
 pub(crate) fn rand() -> u32 {
-    // I, undersigned, voluntarily give up any notion of order, total or partial,
-    // on this piece of memory. Here it is sufficient for a thread of execution to
-    // observe at least its own writes, and acceptable if different threads end up
-    // hammering the same values on their respective cache lines before syncing.
     static STATE: AtomicU32 = AtomicU32::new(0xdeadfa11);
 
     STATE
-        .try_update(Relaxed, Relaxed, |mut v| {
+        .fetch_update(Relaxed, Relaxed, |mut v| {
+            if v == 0 {
+                v = 0xdeadfa11;
+            }
             v ^= v << 13;
             v ^= v >> 17;
             v ^= v << 5;
             Some(v)
         })
-        .unwrap_or(0xf70a57ed)
+        .unwrap_or(0xdeadfa11)
 }
 
 pub(crate) struct Conditions {
@@ -101,7 +102,7 @@ pub trait Setup {
 }
 
 /// Average mid July at Furnas Hall, University at Buffalo.
-/// Lat: 43.0019167, Lon: -78.787083.
+/// Lat: 43.001917, Lon: -78.787083.
 pub struct BuffaloJuly;
 
 impl Setup for BuffaloJuly {

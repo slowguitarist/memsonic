@@ -69,7 +69,6 @@ pub struct SensorConf<const N: usize> {
     pub odr: u32,
     pub cutoff: f32,
     pub qbw: f32,
-    pub firsens: Option<f32>,
     pub sigma: f32,
     pub bias: Bias<N>,
     pub align: Alignment<N>,
@@ -84,7 +83,6 @@ impl<const N: usize> SensorConf<N> {
             odr,
             cutoff: (odr as f32 * 0.4).min(100.0),
             qbw: FRAC_1_SQRT_2,
-            firsens: None,
             sigma: 0.0,
             bias: [0.0; N],
             align: Alignment::identity(),
@@ -99,9 +97,6 @@ impl<const N: usize> SensorConf<N> {
                 odr: self.odr,
                 cutoff: self.cutoff,
                 qbw: self.qbw,
-                sens: self
-                    .firsens
-                    .unwrap_or((self.odr as f32 * 10_000.0).clamp(10_000.0, 700_000.0)),
             },
             m: Disperser {
                 sigma: self.sigma,
@@ -124,7 +119,6 @@ impl<const N: usize> SensorConf<N> {
 
         self.cutoff = interpolate(b, max_cutoff, min_cutoff, i);
         self.qbw = interpolate(b, FRAC_1_SQRT_2, 0.5, i);
-        self.firsens = Some(interpolate(b, 700_000.0, 5_000.0, i));
         self
     }
 

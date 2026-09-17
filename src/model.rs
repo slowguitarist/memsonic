@@ -94,8 +94,8 @@ impl Model {
         self.s.tmp = (self.s.env.sea_tmp - LAPSE_RT * alt).max(216.65);
         self.s.prs = self.s.env.sea_prs * powf(self.s.tmp / self.s.env.sea_tmp, self.s.env.r_exp);
 
-        let v_sq = sq(self.s.vel[0]) + sq(self.s.vel[1]) + sq(self.s.vel[2]);
-        self.s.vib = 1.0 + 0.005 * self.s.acc.norm() + 0.0001 * v_sq;
+        let v_sq = (sq(self.s.vel[0]) + sq(self.s.vel[1]) + sq(self.s.vel[2])).min(25000.0);
+        self.s.vib = (1.0 + 0.005 * self.s.acc.norm() + 0.0001 * v_sq).min(30.0);
 
         self.acl.evaluate(&self.s);
         self.gyr.evaluate(&self.s);
