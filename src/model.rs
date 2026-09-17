@@ -6,7 +6,7 @@
 use crate::{
     XYZ,
     builder::SyntheticSensor,
-    env::{Conditions, LAPSE_RT, MAX_SUBNATICA},
+    env::{Conditions, LAPSE_RT},
     math::{Quaternion, Vector, sq},
     profile::Motion,
     sensors::{Accelerometer, Barometer, Evaluate, Gyroscope, Magnetometer},
@@ -76,20 +76,27 @@ impl Model {
             self.s.ang[2] * (PI / 180.0),
         ];
 
-        let mut kin = self.s.q.integrate(ang_rad, dt).rotate_b2w(self.s.acc);
+        let kin = self.s.q.integrate(ang_rad, dt).rotate_b2w(self.s.acc);
 
-        kin[2] += self.s.env.g_si_ned;
+        let a_lin_z = -(self.s.acc[2] - self.s.env.g_si_ned);
 
-        for (i, val) in kin.iter().enumerate() {
-            self.s.vel[i] += val * dt;
-            self.s.pos[i] += self.s.vel[i] * dt;
+        self.s.vel[0] += kin[0] * dt;
+        self.s.vel[1] += kin[1] * dt;
+        self.s.vel[2] += a_lin_z * dt;
+
+        self.s.pos[0] += self.s.vel[0] * dt;
+        self.s.pos[1] += self.s.vel[1] * dt;
+        self.s.pos[2] += self.s.vel[2] * dt;
+
+        if self.s.pos[2] > 0.0 {
+            self.s.pos[2] = 0.0;
+
+            if self.s.vel[2] > 0.0 {
+                self.s.vel[2] = 0.0;
+            }
         }
 
-        let alt = if self.s.pos[2] > MAX_SUBNATICA {
-            -MAX_SUBNATICA
-        } else {
-            -self.s.pos[2]
-        };
+        let alt = (-self.s.pos[2]).clamp(0.0, 100_000.0);
 
         self.s.tmp = (self.s.env.sea_tmp - LAPSE_RT * alt).max(216.65);
         self.s.prs = self.s.env.sea_prs * powf(self.s.tmp / self.s.env.sea_tmp, self.s.env.r_exp);

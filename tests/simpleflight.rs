@@ -46,21 +46,21 @@ fn simple_flight() {
     let mut ts = 0u32;
 
     while ts < 113_500 {
-        // if let Ok(a) = simu.accel(ts) {
-        //     println!("ACC {} {:?}", ts, a);
-        // }
+        if let Ok(a) = simu.accel(ts) {
+            println!("ACC {} {:?}", ts, a);
+        }
 
-        // if let Ok(a) = simu.angvel(ts) {
-        //     println!("GYR {} {:?}", ts, a);
-        // }
+        if let Ok(a) = simu.angvel(ts) {
+            println!("GYR {} {:?}", ts, a);
+        }
 
-        // if let Ok(a) = simu.magfield(ts) {
-        //     println!("MAG {} {:?}", ts, a);
-        // }
+        if let Ok(a) = simu.magfield(ts) {
+            println!("MAG {} {:?}", ts, a);
+        }
 
-        // if let Ok(a) = simu.pressure(ts) {
-        //     println!("BAR {} {:?}", ts, a);
-        // }
+        if let Ok(a) = simu.pressure(ts) {
+            println!("BAR {} {:?}", ts, a);
+        }
 
         ts += step;
     }
