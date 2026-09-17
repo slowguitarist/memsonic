@@ -19,7 +19,6 @@ pub(crate) const SP_HEAT: f32 = 1.4;
 
 pub(crate) const SHOCK_DEPTH: f32 = -2000.0;
 pub(crate) const DRIFT_PER_C: f32 = 0.5;
-pub(crate) const MAX_SUBNATICA: f32 = 2000.0;
 pub(crate) const TOLER: f32 = 1e-3;
 pub(crate) const FIR_MAX_TAPS: usize = 64;
 pub(crate) const NORMAL_POSITIVE: f32 = 1e-9;

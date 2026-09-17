@@ -5,7 +5,7 @@
 
 use crate::{
     Alignment, Bias, XYZ,
-    env::{TOLER, rand},
+    env::{NORMAL_POSITIVE, TOLER, rand},
 };
 use core::{array::from_fn, f32::consts::PI};
 use libm::{cosf, powf, sinf, tanhf};
@@ -159,9 +159,20 @@ impl<const N: usize> SquareMatrix<N> for Alignment<N> {
 
 impl<const N: usize> Randomize<N> for Alignment<N> {
     fn randomize(self, d: f32) -> Self {
-        let s = d * 0.2;
+        let s = d * 0.01;
         let mut k = self.iter().copied();
-        from_fn(|_| k.next().unwrap_or([0.0; N]).randomize(s))
+        from_fn(|i| {
+            let row = k.next().unwrap_or([0.0; N]);
+            let mut new_row = [0.0; N];
+            for j in 0..N {
+                if i == j {
+                    new_row[j] = leash(row[j], s * 0.5);
+                } else {
+                    new_row[j] = leash(row[j], s);
+                }
+            }
+            new_row
+        })
     }
 }
 
@@ -186,9 +197,9 @@ impl Blend for Barron {
         let c = self.s * (self.t - x);
 
         if x < self.t {
-            self.t * x / (x + c + 1e-9)
+            self.t * x / (x + c + NORMAL_POSITIVE)
         } else {
-            1.0 + (1.0 - self.t) * (x - 1.0) / (1.0 - x - c + 1e-9)
+            1.0 + (1.0 - self.t) * (x - 1.0) / (1.0 - x - c + NORMAL_POSITIVE)
         }
     }
 }
