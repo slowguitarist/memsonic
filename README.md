@@ -4,14 +4,11 @@ An embeddable simulation engine for MEMS accelerometer, gyroscope, barometer, an
 
 ## Motivation
 
-In HPR, stateful navigation algorithms are usually designed and tested using dedicated multiphysics simulation software, while integration testing is done in wind tunnels and during test launches. Because GNC is often indivisible from the rest of software system, validating the integrity of state estimation becomes a double-edged sword:
+In HPR, navigation and guidance algorithms are usually developed and evaluated with multiphysics simulation software, HITL, wind tunnel experiments, and flight tests. However, tight coupling of GNC with the rest of flight software complicates failure isolation and reproduction.
 
-1. Live debugging cannot accommodate in-flight conditions;
-2. Physical simulation is expensive, while useful only ex post facto.
+In-flight debugging cannot recreate exact conditions once they have passed, and physical testing is costly and does not cover the entire fault space. These limitations make long-term regressions difficult to reproduce and localize.
 
-These constraints make it difficult to trace down design and logic errors that incrementally degrade the quality of state estimation under flight conditions.
-
-Memsonic addresses the first constraint. It provides accurate deterministic approximations of calibrated sensor outputs, and supports fault injection for testing corner cases.
+Memsonic complements the existing verification techniques. It provides deterministic approximations of calibrated sensor outputs and controlled fault injection, enabling identical replay of user-defined scenarios.
 
 ## Principle of operation
 
