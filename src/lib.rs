@@ -5,9 +5,15 @@
 #![no_std]
 
 use crate::{
-    builder::SimBuilder, env::Setup, model::Model, profile::CannedProfile, sensors::Consume,
+    builder::SimBuilder,
+    clocks::{Clock, ToSeconds},
+    env::Setup,
+    model::Model,
+    profile::CannedProfile,
+    sensors::Consume,
 };
 
+mod clocks;
 mod filters;
 mod math;
 mod model;
@@ -26,7 +32,7 @@ pub type XYZ = [f32; 3];
 
 /// Output data rates for accelerometer, gyroscope,
 /// magnetometer, and barometer (in this order).
-pub type ODR = (u32, u32, u32, u32);
+pub type ODR = (f32, f32, f32, f32);
 
 /// Bias value for each of N measurement axes.
 pub type Bias<const N: usize> = [f32; N];
@@ -56,7 +62,7 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 	```
 	")]
 	pub fn $f(&mut self, tim: u32) -> Result<$t, $t> {
-		self.propagate(tim).m.$d.consume()
+		self.propagate(tim).phys.$d.consume()
 	}
 ));
 
@@ -65,10 +71,9 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 /////////////////////////////////////////////////////////////////////////////
 
 pub struct Simulation<const N: usize> {
-    p: CannedProfile<N>,
-    m: Model,
-    tim: u32,
-    rate: u32,
+    plot: CannedProfile<N>,
+    phys: Model,
+    clocks: Clock,
 }
 
 impl<const N: usize> Simulation<N> {
@@ -83,10 +88,9 @@ impl<const N: usize> Simulation<N> {
         let rate = b.rate();
         let cond = S::setup().into_cond();
         Self {
-            p: CannedProfile::new(delay, cond.g_si_ned),
-            m: Model::new(rate, b.imu(), b.baro(), cond),
-            tim: 0,
-            rate,
+            plot: CannedProfile::new(delay, cond.g_si_ned),
+            phys: Model::new(rate, b.imu(), b.baro(), cond),
+            clocks: Clock::new(delay, rate).unwrap(),
         }
     }
 
@@ -113,7 +117,7 @@ impl<const N: usize> Simulation<N> {
     /// The second call to [`fix`] will create a new data point with the
     /// timestamp 1350 ms, using new data directly as new target.
     pub fn fix(&mut self, dur: u32, a: XYZ, g: XYZ) -> &mut Self {
-        self.p.append((a, g), dur, false);
+        self.plot.append((a, g), dur, false);
         self
     }
 
@@ -138,23 +142,17 @@ impl<const N: usize> Simulation<N> {
     /// will be added to that of a previous data point. The new target, in
     /// this case, will hold `[0.5, 0.5, 38.3]` and `[0.4, 0.7, 3.3]`.
     pub fn add(&mut self, dur: u32, a: XYZ, g: XYZ) -> &mut Self {
-        self.p.append((a, g), dur, true);
+        self.plot.append((a, g), dur, true);
         self
     }
 
     fn propagate(&mut self, tim: u32) -> &mut Self {
-        let secs = self.rate as f32 / 1000.0;
-
-        if self.tim > tim || tim.wrapping_sub(self.tim) < self.rate {
-            return self;
-        }
-
-        while tim.wrapping_sub(self.tim) >= self.rate
-            && let Some(target) = self.p.linearize(self.tim)
-        {
-            self.tim = self.tim.wrapping_add(self.rate);
-            self.m.derive(secs, target);
-        }
+        self.clocks.fast_forward(tim, |now, tick| {
+            let Some(target) = self.plot.linearize(now) else {
+                return;
+            };
+            self.phys.derive(tick.to_seconds(), target);
+        });
 
         self
     }

@@ -15,6 +15,11 @@ use libm::{cosf, powf, sinf, tanhf};
 /////////////////////////////////////////////////////////////////////////////
 
 #[inline(always)]
+pub(crate) fn round(x: f32) -> u32 {
+    (x + 0.5) as u32
+}
+
+#[inline(always)]
 pub(crate) fn leash(pt: f32, d: f32) -> f32 {
     let r = rand();
     let rand_f = (r as f32 / u32::MAX as f32) * 2.0 - 1.0;

@@ -52,7 +52,7 @@ pub(crate) struct Model {
 
 impl Model {
     pub(crate) fn new(
-        rate: u32,
+        rate: f32,
         imu: [SyntheticSensor<3>; 3],
         bar: SyntheticSensor<1>,
         site: Conditions,

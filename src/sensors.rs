@@ -13,14 +13,14 @@ use crate::{
         BiquadType::{self, LowPass},
         FIRDecim, Filter, WindowedSinc,
     },
-    math::{Vector, sq, sqrt},
+    math::{Vector, round, sq, sqrt},
     model::ModelState,
 };
 use libm::expf;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Collector {
-    pub(crate) odr: u32,
+    pub(crate) odr: f32,
     pub(crate) cutoff: f32,
     pub(crate) qbw: f32,
 }
@@ -93,10 +93,10 @@ struct SensorCore<const N: usize> {
 }
 
 impl<const N: usize> SensorCore<N> {
-    pub(crate) fn new(odr: u32, engrate: u32, biqtype: BiquadType) -> Self {
+    pub(crate) fn new(odr: f32, sim_rate: f32, biqtype: BiquadType) -> Self {
         Self {
-            cic: FIRDecim::new(odr / engrate),
-            biq: BiquadCoef::derive(biqtype, odr as f32),
+            cic: FIRDecim::new(round(odr / sim_rate)),
+            biq: BiquadCoef::derive(biqtype, odr),
             fir: [WindowedSinc::new(); N],
             iir: [Biquad::new(); N],
             meas: [0.0; N],
@@ -108,7 +108,8 @@ impl<const N: usize> SensorCore<N> {
 impl<const N: usize> SensorCore<N> {
     fn collect(&mut self, mut n: impl Iterator<Item = f32>) {
         for i in 0..N {
-            let samp = n.next().expect("Sensor axes must be equal");
+            // #SensorCore = #BiasedAxis = N
+            let samp = n.next().unwrap();
 
             if let Some(dec) = self.fir[i].filter(&self.cic, samp) {
                 self.rel = true;
@@ -158,11 +159,16 @@ pub(crate) struct Accelerometer {
 }
 
 impl Accelerometer {
-    pub(crate) fn new(engrate: u32, vibsens: f32, k: Collector, m: Disperser<3>) -> Self {
+    pub(crate) fn new(
+        sim_rate: f32,
+        die_sens_to_vibration: f32,
+        k: Collector,
+        m: Disperser<3>,
+    ) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
+            k: SensorCore::new(k.odr, sim_rate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
-            vibsens,
+            vibsens: die_sens_to_vibration,
         }
     }
 }
@@ -182,11 +188,16 @@ pub(crate) struct Gyroscope {
 }
 
 impl Gyroscope {
-    pub(crate) fn new(engrate: u32, gsens: f32, k: Collector, m: Disperser<3>) -> Self {
+    pub(crate) fn new(
+        sim_rate: f32,
+        die_sens_to_gravity: f32,
+        k: Collector,
+        m: Disperser<3>,
+    ) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
+            k: SensorCore::new(k.odr, sim_rate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
-            gsens,
+            gsens: die_sens_to_gravity,
         }
     }
 }
@@ -210,9 +221,9 @@ pub(crate) struct Magnetometer {
 }
 
 impl Magnetometer {
-    pub(crate) fn new(engrate: u32, k: Collector, m: Disperser<3>) -> Self {
+    pub(crate) fn new(sim_rate: f32, k: Collector, m: Disperser<3>) -> Self {
         Self {
-            k: SensorCore::new(k.odr, engrate, LowPass(k.cutoff, k.qbw)),
+            k: SensorCore::new(k.odr, sim_rate, LowPass(k.cutoff, k.qbw)),
             m: BiasedAxis::new(m.sigma, m.bias, m.align),
         }
     }
@@ -236,7 +247,7 @@ pub(crate) struct Barometer {
 
 impl Barometer {
     pub(crate) fn new(
-        sim_rate: u32,
+        sim_rate: f32,
         filters: Collector,
         noise: Disperser<1>,
         sea_tmp: f32,
@@ -306,5 +317,5 @@ consume_impl! {
     (Accelerometer, XYZ, |meas: XYZ| meas),
     (Gyroscope,     XYZ, |meas: XYZ| meas),
     (Magnetometer,  XYZ, |meas: XYZ| meas),
-    (Barometer,     f32, |meas: [f32;1]| meas[0]),
+    (Barometer,     f32, |meas: [f32; 1]| meas[0]),
 }

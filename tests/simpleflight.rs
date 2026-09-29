@@ -6,7 +6,7 @@ use memsonic::{
 
 #[test]
 fn simple_flight() {
-    let b = SkewedIMU::new((10, 10, 30, 40), 0.5);
+    let b = SkewedIMU::new((10.0, 10.0, 30.0, 40.0), 0.5);
     let mut simu = Simulation::<17>::new::<Furnas>(b, 1000);
 
     // 1. Ignition & Launch Rail Exit (Ramp-up)

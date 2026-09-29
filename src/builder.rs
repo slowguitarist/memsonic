@@ -16,7 +16,6 @@ use crate::{
     sensors::{Collector, Disperser},
 };
 use core::f32::consts::FRAC_1_SQRT_2;
-use libm::ceilf;
 
 /// Builder public API.
 pub trait SimBuilder {
@@ -45,10 +44,11 @@ pub trait SimBuilder {
     /// not called by the user but instead inside the simulation.
     fn baro(&mut self) -> SyntheticSensor<1>;
 
-    /// Returns the engine's sampling rate. Whether the sensors'
-    /// ODRs will be preserved depends on the specific builder
-    /// implementation.
-    fn rate(&mut self) -> u32;
+    /// Returns the engine's sampling rate. Sensor's ODRs should be always
+    /// preserved unless the calculated ODR value is abnormal. In reality,
+    /// though, there are no sensors running at 2^126 sps; otherwise, the
+    /// simulation will never finish computing.
+    fn rate(&mut self) -> f32;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ pub struct SyntheticSensor<const N: usize> {
 /// will be replaced with a heuristic guess by the builder.
 #[derive(Clone, Copy)]
 pub struct SensorConf<const N: usize> {
-    pub odr: u32,
+    pub odr: f32,
     pub cutoff: f32,
     pub qbw: f32,
     pub sigma: f32,
@@ -78,10 +78,10 @@ pub struct SensorConf<const N: usize> {
 impl<const N: usize> SensorConf<N> {
     /// Returns a uniform "ideal" preset, which is then modified
     /// by the builder to create the desired configuration.
-    fn ideal(odr: u32) -> Self {
+    fn ideal(odr: f32) -> Self {
         Self {
             odr,
-            cutoff: (odr as f32 * 0.4).min(100.0),
+            cutoff: (odr * 0.4).min(100.0),
             qbw: FRAC_1_SQRT_2,
             sigma: 0.0,
             bias: [0.0; N],
@@ -114,8 +114,8 @@ impl<const N: usize> SensorConf<N> {
     fn decay(&mut self, b: impl Blend, x: f32) -> &mut Self {
         let i = 1.0 - x;
 
-        let max_cutoff = (self.odr as f32 * 0.4).min(100.0);
-        let min_cutoff = (self.odr as f32 * 0.1).min(20.0);
+        let max_cutoff = (self.odr * 0.4).min(100.0);
+        let min_cutoff = (self.odr * 0.1).min(20.0);
 
         self.cutoff = interpolate(b, max_cutoff, min_cutoff, i);
         self.qbw = interpolate(b, FRAC_1_SQRT_2, 0.5, i);
@@ -161,36 +161,14 @@ impl SimBuilder for Manual {
         }
     }
 
-    /// Returns the engine's sampling rate with two upheld invariants:
-    ///
-    /// 1. The returned rate is at least one (millisecond).
-    /// 2. The returned rate is at least five times smaller than the
-    ///    fastest sensor's output data rate.
-    ///
-    /// If these two invariants contradict, the engine's rate is set to
-    /// 1 millisecond and sensors' ODRs are upscaled to preserve ratio
-    /// and an optimal sampling rate.
-    fn rate(&mut self) -> u32 {
-        let m = self
-            .acc
+    /// Returns the slowest viable rate (0.2 * minimum ODR).
+    fn rate(&mut self) -> f32 {
+        self.acc
             .odr
             .min(self.gyr.odr)
             .min(self.mag.odr)
-            .min(self.bar.odr);
-
-        let mut eng = m / 5;
-
-        if eng == 0 {
-            eng = 1;
-            let k = 5.0 / (m as f32);
-
-            self.acc.odr = ceilf(self.acc.odr as f32 * k) as u32;
-            self.gyr.odr = ceilf(self.gyr.odr as f32 * k) as u32;
-            self.mag.odr = ceilf(self.mag.odr as f32 * k) as u32;
-            self.bar.odr = ceilf(self.bar.odr as f32 * k) as u32;
-        }
-
-        eng
+            .min(self.bar.odr)
+            / 5.0
     }
 
     /// Wraps IMU sensor configuration into internal type.
@@ -221,16 +199,10 @@ impl SimBuilder for SkewedIMU {
         }
     }
 
-    /// Returns the engine's sampling rate with two upheld invariants:
+    /// Returns the slowest viable rate (0.2 * minimum ODR).
     ///
-    /// 1. The returned rate is at least one (millisecond).
-    /// 2. The returned rate is at least five times smaller than the
-    ///    fastest sensor's output data rate.
-    ///
-    /// If these two invariants contradict, the engine's rate is set to
-    /// 1 millisecond and sensors' ODRs are upscaled to preserve ratio
-    /// and an optimal sampling rate.
-    fn rate(&mut self) -> u32 {
+    /// TODO: implement variations from the default.
+    fn rate(&mut self) -> f32 {
         self.m.rate()
     }
 
