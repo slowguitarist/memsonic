@@ -283,32 +283,28 @@ pub(crate) trait Consume<T> {
     fn consume(&mut self) -> Result<T, T>;
 }
 
-macro_rules! extract3axis {
-    ($sensor:ident) => {
-        impl Consume<XYZ> for $sensor {
-            fn consume(&mut self) -> Result<XYZ, XYZ> {
-                if self.k.rel {
-                    self.k.rel = false;
-                    Ok(self.k.meas)
-                } else {
-                    Err(self.k.meas)
+macro_rules! consume_impl {
+    ($(($sensor:ident, $ty:ty, $accessor:expr)),+ $(,)?) => {
+        $(
+            impl Consume<$ty> for $sensor {
+                fn consume(&mut self) -> Result<$ty, $ty> {
+                    let meas = ($accessor)(self.k.meas);
+
+                    if self.k.rel {
+                        self.k.rel = false;
+                        Ok(meas)
+                    } else {
+                        Err(meas)
+                    }
                 }
             }
-        }
+        )+
     };
 }
 
-extract3axis!(Accelerometer);
-extract3axis!(Gyroscope);
-extract3axis!(Magnetometer);
-
-impl Consume<f32> for Barometer {
-    fn consume(&mut self) -> Result<f32, f32> {
-        if self.k.rel {
-            self.k.rel = false;
-            Ok(self.k.meas[0])
-        } else {
-            Err(self.k.meas[0])
-        }
-    }
+consume_impl! {
+    (Accelerometer, XYZ, |meas: XYZ| meas),
+    (Gyroscope,     XYZ, |meas: XYZ| meas),
+    (Magnetometer,  XYZ, |meas: XYZ| meas),
+    (Barometer,     f32, |meas: [f32;1]| meas[0]),
 }

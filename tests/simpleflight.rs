@@ -1,13 +1,13 @@
 use memsonic::{
     Simulation,
     builder::{SimBuilder, SkewedIMU},
-    env::BuffaloJuly,
+    env::Furnas,
 };
 
 #[test]
 fn simple_flight() {
     let b = SkewedIMU::new((10, 10, 30, 40), 0.5);
-    let mut simu = Simulation::<17>::new::<BuffaloJuly>(b, 1000);
+    let mut simu = Simulation::<17>::new::<Furnas>(b, 1000);
 
     // 1. Ignition & Launch Rail Exit (Ramp-up)
     simu.fix(200, [0.3, -0.1, 28.5], [0.5, -0.8, 45.0])

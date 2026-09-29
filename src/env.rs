@@ -102,9 +102,9 @@ pub trait Setup {
 
 /// Average mid July at Furnas Hall, University at Buffalo.
 /// Lat: 43.001917, Lon: -78.787083.
-pub struct BuffaloJuly;
+pub struct Furnas;
 
-impl Setup for BuffaloJuly {
+impl Setup for Furnas {
     fn setup() -> Surface {
         Surface {
             mag: [19_133.4, -3_452.9, 48_806.1],

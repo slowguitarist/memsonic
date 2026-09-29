@@ -56,7 +56,7 @@ macro_rules! getter (($n:literal, $f:ident, $d:ident, $t:ty) => (
 	```
 	")]
 	pub fn $f(&mut self, tim: u32) -> Result<$t, $t> {
-		self.step(tim).m.$d.consume()
+		self.propagate(tim).m.$d.consume()
 	}
 ));
 
@@ -100,7 +100,7 @@ impl<const N: usize> Simulation<N> {
     /// Assume a builder `b` previously created.
     ///
     /// ```ignore
-    /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
+    /// let sim = Simulation::<3>::new::<Furnas>(b, 1000);
     /// sim
     ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])
     ///     .fix(150, [0.3, 0.2, 26.1], [0.3, 0.3, 1.0]);
@@ -127,7 +127,7 @@ impl<const N: usize> Simulation<N> {
     /// Assume a builder `b` previously created.
     ///
     /// ```ignore
-    /// let sim = Simulation::<3>::new::<BuffaloJuly>(b, 1000);
+    /// let sim = Simulation::<3>::new::<Furnas>(b, 1000);
     /// sim
     ///     .fix(200, [0.2, 0.3, 12.2], [0.1, 0.4, 2.3])
     ///     .add(150, [0.3, 0.2, 26.1], [0.3, 0.3, 1.0]);
@@ -142,9 +142,7 @@ impl<const N: usize> Simulation<N> {
         self
     }
 
-    /// Breaks elapsed time into equal intervals equal to engine rate
-    /// and calls derivation logic multiple times. Lazy.
-    fn step(&mut self, tim: u32) -> &mut Self {
+    fn propagate(&mut self, tim: u32) -> &mut Self {
         let secs = self.rate as f32 / 1000.0;
 
         if self.tim > tim || tim.wrapping_sub(self.tim) < self.rate {
