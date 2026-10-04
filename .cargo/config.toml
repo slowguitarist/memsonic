@@ -1,0 +1,7 @@
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[alias]
+test-desktop = "test --target host-tuple --features desktop -- --nocapture"
+check-desktop = "check --target host-tuple --features desktop"
+build-desktop = "build --target host-tuple --features desktop"

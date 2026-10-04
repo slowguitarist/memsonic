@@ -2,7 +2,7 @@
 //!
 //! MEMS sensor simulation engine for high-power rocketry.
 
-#![no_std]
+#![cfg_attr(not(feature = "desktop"), no_std)]
 
 use crate::{
     builder::SimBuilder,

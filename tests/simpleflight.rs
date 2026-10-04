@@ -1,3 +1,5 @@
+#![cfg(feature = "desktop")]
+
 use memsonic::{
     Simulation,
     builder::{SimBuilder, SkewedIMU},

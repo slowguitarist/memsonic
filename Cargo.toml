@@ -5,3 +5,15 @@ edition = "2024"
 
 [dependencies]
 libm = "0.2.16"
+
+[features]
+default = []
+desktop = []
+
+[package.metadata.docs.rs]
+all-features = true
+
+[[test]]
+name = "simpleflight"
+path = "tests/simpleflight.rs"
+required-features = ["desktop"]
