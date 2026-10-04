@@ -114,3 +114,17 @@ impl Setup for Furnas {
         }
     }
 }
+
+/// Average mid June at IREC rocket launch facility near Saragosa, TX.
+/// Lat: 31.030896, Lon: -103.540106.
+pub struct IREC;
+
+impl Setup for IREC {
+    fn setup() -> Surface {
+        Surface {
+            mag: [23_914.3, 2_548.8, 39_827.1],
+            tmp: 300.35,
+            prs: 91_900.0,
+        }
+    }
+}
