@@ -23,6 +23,9 @@ mod sensors;
 pub mod builder;
 pub mod env;
 
+#[cfg(feature = "ffi")]
+pub mod ffi;
+
 /////////////////////////////////////////////////////////////////////////////
 // Public helper types
 /////////////////////////////////////////////////////////////////////////////
@@ -77,6 +80,24 @@ pub struct Simulation<const N: usize> {
 }
 
 impl<const N: usize> Simulation<N> {
+    /// Creates a new simulation from a pre-resolved [`env::Surface`].
+    ///
+    /// This is the FFI-friendly variant of [`new`] that accepts environment
+    /// as an argument.
+    pub(crate) fn new_dynamic_env(
+        mut b: impl SimBuilder,
+        surface: env::Surface,
+        delay: u32,
+    ) -> Self {
+        let rate = b.rate();
+        let cond = surface.into_cond();
+        Self {
+            plot: CannedProfile::new(delay, cond.g_si_ned),
+            phys: Model::new(rate, b.imu(), b.baro(), cond),
+            clocks: Clock::new(delay, rate).unwrap(),
+        }
+    }
+
     /// Creates a new simulation, consuming the builder `b`.
     ///
     /// `new()` will return the non-copyable simulation struct itself.
