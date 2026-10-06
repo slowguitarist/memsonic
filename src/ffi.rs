@@ -141,7 +141,7 @@ pub unsafe extern "C" fn ms_sim_new_manual(
 
     let odr_val: crate::ODR = unsafe { (*odr).into() };
     let b = Manual::new(odr_val, ());
-    let sim = Sim::new_dynamic_env(b, env_surface(env), delay);
+    let sim = Sim::new_with_surface(b, env_surface(env), delay);
 
     unsafe { place(buf, sim) }
 }
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn ms_sim_new_skewed(
 
     let odr_val: crate::ODR = unsafe { (*odr).into() };
     let b = SkewedIMU::new(odr_val, d);
-    let sim = Sim::new_dynamic_env(b, env_surface(env), delay);
+    let sim = Sim::new_with_surface(b, env_surface(env), delay);
 
     unsafe { place(buf, sim) }
 }
