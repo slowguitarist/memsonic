@@ -84,6 +84,7 @@ impl<const N: usize> Simulation<N> {
     ///
     /// This is the FFI-friendly variant of [`new`] that accepts environment
     /// as an argument.
+    #[allow(unused)]
     pub(crate) fn new_dynamic_env(
         mut b: impl SimBuilder,
         surface: env::Surface,
@@ -105,6 +106,7 @@ impl<const N: usize> Simulation<N> {
     /// `delay` specifies the time during which no work should be done
     /// towards kinematic targets. This is useful to simulate inherent
     /// sensor drift while a vehicle is stationary.
+    #[allow(unused)]
     pub fn new<S: Setup>(mut b: impl SimBuilder, delay: u32) -> Self {
         let rate = b.rate();
         let cond = S::setup().into_cond();
