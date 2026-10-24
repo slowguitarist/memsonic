@@ -28,7 +28,7 @@ pub(crate) fn rand() -> u32 {
     static STATE: AtomicU32 = AtomicU32::new(0xdeadfa11);
 
     STATE
-        .fetch_update(Relaxed, Relaxed, |mut v| {
+        .try_update(Relaxed, Relaxed, |mut v| {
             if v == 0 {
                 v = 0xdeadfa11;
             }
