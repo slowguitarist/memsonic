@@ -93,7 +93,11 @@ struct SensorCore<const N: usize> {
 }
 
 impl<const N: usize> SensorCore<N> {
-    pub(crate) fn new(odr: f32, sim_rate: f32, biqtype: BiquadType) -> Self {
+    pub(crate) fn new(mut odr: f32, sim_rate: f32, biqtype: BiquadType) -> Self {
+        if odr == 0.0 {
+            odr = f32::MAX;
+        }
+
         Self {
             cic: FIRDecim::new(round(odr / sim_rate)),
             biq: BiquadCoef::derive(biqtype, odr),

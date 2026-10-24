@@ -112,6 +112,10 @@ impl<const N: usize> SensorConf<N> {
     /// Returns a unique reference to [`SensorConf`] for chaining
     /// other filters.
     fn decay(&mut self, b: impl Blend, x: f32) -> &mut Self {
+        if self.odr == 0.0 {
+            return self;
+        }
+
         let i = 1.0 - x;
 
         let max_cutoff = (self.odr * 0.4).min(100.0);
@@ -163,11 +167,11 @@ impl SimBuilder for Manual {
 
     /// Returns the slowest viable rate (0.2 * minimum ODR).
     fn rate(&mut self) -> f32 {
-        self.acc
-            .odr
-            .min(self.gyr.odr)
-            .min(self.mag.odr)
-            .min(self.bar.odr)
+        [self.acc.odr, self.gyr.odr, self.mag.odr, self.bar.odr]
+            .into_iter()
+            .filter(|&value| value != 0.0)
+            .reduce(f32::min)
+            .unwrap_or(0.0)
             / 5.0
     }
 

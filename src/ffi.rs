@@ -17,6 +17,7 @@
 //!     sim_buf, &odr, 0.5f, MS_ENV_FURNAS, 1000);
 //! ```
 
+use core::fmt::Write;
 use core::{mem, ptr};
 
 use crate::{
@@ -25,10 +26,49 @@ use crate::{
     env::{Furnas, IREC, Setup, Surface},
 };
 
-// Only compiled when memsonic is compiled as standalone.
+// For use with ZephyrOS.
+unsafe extern "C" {
+    fn printk(fmt: *const u8, ...);
+}
+
+struct PrintkBuffer<const N: usize> {
+    buf: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> PrintkBuffer<N> {
+    const fn new() -> Self {
+        Self {
+            buf: [0; N],
+            len: 0,
+        }
+    }
+}
+
+impl<const N: usize> core::fmt::Write for PrintkBuffer<N> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let bytes = s.as_bytes();
+        let remaining = self.buf.len() - 1 - self.len;
+        let take = core::cmp::min(bytes.len(), remaining);
+
+        self.buf[self.len..self.len + take].copy_from_slice(&bytes[..take]);
+        self.len += take;
+        self.buf[self.len] = 0;
+        Ok(())
+    }
+}
+
 #[cfg(all(not(feature = "desktop"), not(test)))]
 #[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    let mut writer = PrintkBuffer::<256>::new();
+    let _ = write!(&mut writer, "PANIC: {}\0", info);
+
+    unsafe {
+        printk(b"%s\n\0".as_ptr(), writer.buf.as_ptr());
+    }
+
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
     loop {}
 }
 
