@@ -1,6 +1,6 @@
-# memsonic
+# Memsonic
 
-An embeddable simulation engine for MEMS accelerometer, gyroscope, barometer, and magnetometer.
+An embeddable simulation for MEMS accelerometer, gyroscope, barometer, and magnetometer.
 Tailored for high-power rocketry.
 
 ## Rationale
