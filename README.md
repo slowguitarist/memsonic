@@ -1,3 +1,5 @@
+Note: development has moved to [Codeberg](https://codeberg.org/slowguitarist/memsonic).
+
 # Memsonic
 
 An embeddable simulation for MEMS accelerometer, gyroscope, barometer, and magnetometer.
